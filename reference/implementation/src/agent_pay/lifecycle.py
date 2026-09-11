@@ -43,7 +43,13 @@ class PaymentLifecycle:
                 customer_ledger_account_id: UUID, clearing_ledger_account_id: UUID,
                 correlation_id: str | None = None) -> str:
         key = f"payment:{payment_id}:capture"
-        row = self.payments.get_payment(payment_id)
+        # Capture and void are mutually exclusive provider operations. Hold the
+        # payment row for the complete lifecycle so concurrent callers cannot
+        # both observe AUTHORIZED and initiate conflicting external operations.
+        row = self.conn.execute(
+            "SELECT id, payment_request_id, amount, currency, status FROM payments WHERE id=%s FOR UPDATE",
+            (payment_id,),
+        ).fetchone()
         if not row:
             raise ValueError("payment not found")
         if row[4] == "SUCCEEDED":
@@ -79,7 +85,12 @@ class PaymentLifecycle:
     def void(self, *, payment_id: UUID, amount: Decimal, currency: str,
              correlation_id: str | None = None) -> str:
         key = f"payment:{payment_id}:void"
-        row = self.payments.get_payment(payment_id)
+        # Capture and void are mutually exclusive provider operations. The same
+        # row lock used by capture prevents a concurrent void from racing it.
+        row = self.conn.execute(
+            "SELECT id, payment_request_id, amount, currency, status FROM payments WHERE id=%s FOR UPDATE",
+            (payment_id,),
+        ).fetchone()
         if not row:
             raise ValueError("payment not found")
         if row[4] == "VOIDED":
