@@ -9,19 +9,23 @@ class PaymentRepository:
         self.conn = conn
 
     def create_request(self, *, account_id: UUID, agent_id: UUID, amount: str,
-                       currency: str, purpose: str, items: list, idempotency_key: str) -> UUID:
+                       currency: str, purpose: str, items: list, idempotency_key: str,
+                       request_fingerprint: str | None = None) -> UUID:
         row = self.conn.execute(
             """INSERT INTO payment_requests
-               (account_id, agent_id, amount, currency, purpose, items, idempotency_key)
-               VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+               (account_id, agent_id, amount, currency, purpose, items, idempotency_key, request_fingerprint)
+               VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s)
                RETURNING id""",
-            (account_id, agent_id, amount, currency, purpose, json.dumps(items), idempotency_key),
+            (account_id, agent_id, amount, currency, purpose, json.dumps(items), idempotency_key,
+             request_fingerprint),
         ).fetchone()
         return row[0]
 
     def find_by_idempotency(self, account_id: UUID, key: str):
         return self.conn.execute(
-            "SELECT id, amount, currency, purpose, items FROM payment_requests WHERE account_id=%s AND idempotency_key=%s",
+            """SELECT id, amount, currency, purpose, items, request_fingerprint
+               FROM payment_requests
+               WHERE account_id=%s AND idempotency_key=%s""",
             (account_id, key),
         ).fetchone()
 
