@@ -6,6 +6,7 @@ resolver and settlement repository.
 """
 import json
 import os
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -26,6 +27,28 @@ def _secret_for(provider_name: str) -> str:
         c if c.isalnum() else "_" for c in provider_name.upper()
     )
     return os.getenv(key) or os.getenv("AGENT_PAY_PROVIDER_WEBHOOK_SECRET", "")
+
+
+def _enforce_replay_window(payload: dict) -> None:
+    raw_window = os.getenv("AGENT_PAY_WEBHOOK_REPLAY_WINDOW_SECONDS", "0")
+    try:
+        window = int(raw_window)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail="invalid webhook replay-window configuration") from exc
+    if window <= 0:
+        return
+    occurred_at = payload.get("occurred_at") or payload.get("timestamp")
+    if not isinstance(occurred_at, str):
+        raise HTTPException(status_code=400, detail="provider timestamp is required")
+    try:
+        parsed = datetime.fromisoformat(occurred_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid provider timestamp") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    age = abs((datetime.now(timezone.utc) - parsed).total_seconds())
+    if age > window:
+        raise HTTPException(status_code=400, detail="provider event is outside replay window")
 
 
 def _ledger_accounts(conn, payment_id: UUID):
@@ -65,6 +88,9 @@ async def provider_webhook(
         payload = json.loads(body)
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="invalid JSON payload") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="provider payload must be an object")
+    _enforce_replay_window(payload)
     event_id = payload.get("event_id")
     event_type = payload.get("event_type")
     provider_reference = payload.get("provider_reference")
@@ -73,8 +99,6 @@ async def provider_webhook(
 
     outcome_map = {"payment.succeeded": "SUCCEEDED", "payment.failed": "FAILED"}
     outcome = outcome_map.get(event_type)
-    if not outcome:
-        raise HTTPException(status_code=202, detail="unsupported provider event accepted for later handling")
 
     with connection() as conn:
         with UnitOfWork(conn):
@@ -85,6 +109,10 @@ async def provider_webhook(
             )
             if event_db_id is None:
                 return {"status": "DUPLICATE", "event_id": event_id}
+            if not outcome:
+                return {"status": "ACCEPTED", "event_id": event_id}
+            if not isinstance(provider_reference, str) or not provider_reference:
+                raise HTTPException(status_code=400, detail="provider_reference is required for financial events")
             operation = conn.execute(
                 """SELECT id, payment_id FROM provider_operations
                    WHERE provider_reference=%s ORDER BY created_at DESC LIMIT 1 FOR UPDATE""",
