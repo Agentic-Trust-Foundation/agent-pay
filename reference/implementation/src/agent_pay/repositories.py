@@ -85,11 +85,8 @@ class BudgetRepository:
             return None
         requested = Decimal(str(amount))
         available = Decimal(row[1]) - Decimal(row[2]) - Decimal(row[3])
-        if available < requested or row[4].strip().upper() != str(self._currency_hint(amount)).upper():
-            # Currency is validated by the payment orchestration layer; this branch only
-            # protects against accidental non-decimal input here.
-            if available < requested:
-                return None
+        if available < requested:
+            return None
         reservation = self.conn.execute(
             """INSERT INTO budget_reservations (budget_id, payment_request_id, amount, currency)
                VALUES (%s,%s,%s,%s) RETURNING id""",
@@ -97,10 +94,6 @@ class BudgetRepository:
         ).fetchone()[0]
         self.conn.execute("UPDATE budgets SET reserved_amount=reserved_amount+%s, updated_at=now() WHERE id=%s", (requested, budget_id))
         return reservation
-
-    @staticmethod
-    def _currency_hint(_: str) -> str:
-        return ""
 
     def consume(self, reservation_id: UUID):
         row = self.conn.execute(
@@ -110,10 +103,7 @@ class BudgetRepository:
             raise ValueError("budget reservation not found")
         if row[2] != "RESERVED":
             return
-        self.conn.execute(
-            "UPDATE budget_reservations SET status='CONSUMED', consumed_at=now() WHERE id=%s",
-            (reservation_id,),
-        )
+        self.conn.execute("UPDATE budget_reservations SET status='CONSUMED', consumed_at=now() WHERE id=%s", (reservation_id,))
         self.conn.execute(
             """UPDATE budgets SET reserved_amount=reserved_amount-%s,
                       consumed_amount=consumed_amount+%s, updated_at=now() WHERE id=%s""",
@@ -128,8 +118,5 @@ class BudgetRepository:
             raise ValueError("budget reservation not found")
         if row[2] != "RESERVED":
             return
-        self.conn.execute(
-            "UPDATE budget_reservations SET status='RELEASED', released_at=now() WHERE id=%s",
-            (reservation_id,),
-        )
+        self.conn.execute("UPDATE budget_reservations SET status='RELEASED', released_at=now() WHERE id=%s", (reservation_id,))
         self.conn.execute("UPDATE budgets SET reserved_amount=reserved_amount-%s, updated_at=now() WHERE id=%s", (row[1], row[0]))
