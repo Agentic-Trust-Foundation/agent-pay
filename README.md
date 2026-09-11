@@ -4,64 +4,21 @@ Agent-Pay is the financial control and payment layer for the agentic internet.
 
 It enables agents to initiate payments under explicit delegated authority, financial policies, budgets, approvals, risk controls, and payment constraints without giving agents unrestricted access to money or primary financial credentials.
 
-## Role in the Agentic Internet
-
-Agent-Pay is intentionally separate from the [Agentic Trust Foundation](https://github.com/Agentic-Trust-Foundation/agentic-trust).
-
-- **Agentic Trust Foundation** establishes authority: identity, delegation, authorization, trust, capability, consent, revocation, provenance, and related evidence.
-- **Agent-Pay** applies financial control and executes financial intent: wallets, funding, payment instruments, spending policy, budgets, approval, payment routing, payment execution, transactions, settlement, refunds, reconciliation, and financial ledgering.
-
-> **Trust Foundation answers: "Is this agent authorized?"**
->
-> **Agent-Pay answers: "Can this authorized agent spend this money for this transaction, under these financial constraints, and how should it be executed?"**
-
 ## Core Principle
 
 > **The Agent should receive spending authority, not financial credentials.**
 
 > **Agent requests; Agent-Pay decides; Payment Rail executes; Ledger records financial truth.**
 
+## Boundary with Agentic Trust Foundation
+
+Agentic Trust Foundation establishes identity, delegation, authorization, trust, capability, consent, revocation, provenance, and related evidence.
+
+Agent-Pay consumes that authority context and applies financial controls: policy, budget, approval, payment authentication, instrument routing, payment execution, transaction, settlement, reconciliation, and ledgering.
+
 ## Design Position
 
-Agent-Pay follows a **protocol-first, implementation-backed, service-optional** approach. The protocol remains vendor-neutral and interoperable. No single wallet provider, bank, payment processor, blockchain, or identity provider is mandatory.
-
-Agent-Pay is not intended to become a general identity/trust protocol or a complete agentic commerce protocol. It integrates with those ecosystems through explicit adapters and references.
-
-## Core Flow
-
-```text
-User → Agent
-        ↓ payment intent + authorization evidence
-     Agent-Pay
-        ├── Authorization Evidence / Delegation Context
-        ├── Spending Policy
-        ├── Budget / Reservation
-        ├── Risk / Authentication
-        └── Approval
-              ↓
-        Payment Router
-          ├── Wallet
-          ├── Virtual Card
-          ├── Bank / PSP
-          └── Other Instrument
-              ↓
-        Merchant / Payment Rail
-              ↓ async events / webhooks
-        Transaction → Settlement / Reconciliation → Ledger
-```
-
-## Financial Control Model
-
-```text
-Policy    = Is this spending permitted?
-Budget    = Is enough allocated capacity available?
-Wallet    = Is enough actual money available?
-Approval  = Is explicit human approval required?
-Payment   = How is the financial operation executed?
-Ledger    = What is the authoritative financial record?
-```
-
-Passing one control never implies passing the others.
+Agent-Pay is **protocol-first, implementation-backed, and service-optional**. It is not a general identity/trust protocol, a complete commerce protocol, a merchant catalog, or a replacement for banking/payment rails.
 
 ## V1 Architecture
 
@@ -71,58 +28,36 @@ V1 is a **modular monolith** backed by PostgreSQL, with a transactional outbox a
 API
  ↓
 Agent-Pay Core
- ├── Authorization Context
- ├── Policy
- ├── Budget
+ ├── Agent / Delegation / Authorization Context
+ ├── Policy / Policy Version
+ ├── Budget / Reservation
  ├── Approval
- ├── Payment Orchestrator
- ├── Payment Router / Adapters
- ├── Wallet / Ledger
- ├── Transaction
- ├── Reconciliation
- ├── Audit
- └── Notification
+ ├── Payment / Authentication / Provider Operation
+ ├── Payment Router / Instruments
+ ├── Transaction / Ledger
+ ├── Settlement / Reconciliation
+ └── Audit / Notification
  ↓
 PostgreSQL + Outbox
 ```
 
-Redis may support ephemeral concerns such as rate limiting or caching, but never becomes the financial source of truth.
+Redis may support operational acceleration but never becomes financial source of truth.
 
-## Scope
+## Financial Control Model
 
-### In scope
+```text
+Delegation = What authority was granted?
+Policy     = Under what conditions may it be spent?
+Budget     = How much allocated capacity remains?
+Approval   = Does this exact intent require human approval?
+Payment    = How is the financial operation executed?
+Transaction= What economic operation occurred?
+Ledger     = What is the authoritative accounting record?
+```
 
-- Funding, wallets and wallet accounts
-- Payment instruments and future virtual-card integration
-- Payment Intent / Payment Request
-- Spending Policy
-- Budgets and reservations
-- Approval workflows
-- Payment authentication boundary
-- Payment routing and provider integration
-- Transaction lifecycle
-- Settlement and reconciliation
-- Refunds and reversals
-- Financial ledger
-- Provider webhooks and asynchronous events
-- Audit and notifications
-- Integration with agentic commerce protocols
-- Integration with Agentic Trust Foundation authorization evidence
+Passing one control never implies passing the others.
 
-### Out of scope
-
-- General agent identity
-- General-purpose authorization protocol
-- General agent reputation/trust network
-- General delegation protocol
-- Healthcare/cloud authorization
-- Enterprise IAM replacement
-- Central global trust authority
-- Mandatory blockchain or cryptocurrency
-- Mandatory payment provider
-- Full product catalog / fulfillment / commerce protocol
-
-## Payment Lifecycle
+## Canonical Payment Lifecycle
 
 ```text
 REQUESTED
@@ -133,28 +68,65 @@ REQUESTED
  → APPROVAL_REQUIRED / APPROVED
  → PAYMENT_PENDING
  → PROCESSING
- → SUCCEEDED / FAILED
- → SETTLEMENT / RECONCILIATION
+ → SUCCEEDED / FAILED / UNKNOWN_EXTERNAL_OUTCOME
 ```
 
-Refunds, reversals, disputes, chargebacks, and provider reconciliation are separate auditable financial operations.
+External timeout does not automatically mean failure. Refund, reversal/void, settlement, dispute, and reconciliation are separate auditable financial operations.
+
+## Stage 3 — Consistency Convergence
+
+The Master Project Schema is now the architecture baseline and Stage 3 aligns the implementation artifacts around it.
+
+Implemented on `main`:
+
+- canonical consistency/convergence gate;
+- converged OpenAPI lifecycle and RFC 9457-style errors;
+- first-class persistence migration for authorization evidence;
+- immutable policy-version model;
+- budget reservations;
+- payment authentication records;
+- provider operation/event persistence;
+- settlement and reconciliation persistence;
+- transactional outbox persistence;
+- double-entry-ready ledger journal/posting model;
+- behavioral V1 conformance vectors;
+- V1 payment-intent JSON Schema.
+
+The additive SQL migration is intentionally separate from the original draft schema so the project can migrate safely rather than silently rewriting historical assumptions.
 
 ## Current Status
 
-The repository is in the architecture/specification phase. V1 domain, ledger, database, API, security, authorization-evidence, routing, asynchronous events/webhooks, settlement/reconciliation, financial lifecycle, idempotency/concurrency, tokenization, budget reservation, policy, budget, approval, payment state machine, authentication, commerce boundary, financial invariants, and reference-implementation architecture are defined.
+The repository is still **not a production payment system**. The architecture/specification baseline is substantially converged, while executable reference implementation, real provider adapters, production cryptographic/vault controls, regulatory/compliance work, operational hardening, and full dispute/chargeback capability remain implementation stages.
 
-It is **not yet a production payment system**. Provider integrations, production security controls, regulatory/compliance analysis, operational hardening, and the executable reference implementation remain implementation work.
+## Scope
 
-## Relationship with Agentic Trust Foundation
+### In scope
 
-Agent-Pay consumes trust decisions and authorization evidence rather than redefining them.
+- Wallets and funding
+- Payment instruments and future virtual-card integration
+- Payment Intent / Payment Request
+- Spending Policy and Policy Versioning
+- Budgets and reservations
+- Approval workflows
+- Payment authentication boundary
+- Payment routing and provider integration
+- Transaction lifecycle
+- Settlement and reconciliation
+- Refunds and reversals
+- Financial ledger
+- Provider webhooks/events
+- Audit and notifications
+- Agentic commerce context integration
+- Agentic Trust Foundation authorization-evidence integration
 
-- Trust policy: *Can this agent perform this kind of action?*
-- Spending policy: *Can this agent spend this amount, from this account/instrument, with these financial constraints?*
+### Out of scope
 
-## Integration with Agentic Commerce
-
-Agent-Pay may consume order, checkout, cart, or merchant references from agentic commerce protocols such as UCP, ACP, or future standards. Those references provide commerce context; Agent-Pay remains responsible for financial authorization and execution rather than becoming the catalog or fulfillment system.
+- General agent identity/trust network
+- General delegation protocol
+- Enterprise IAM replacement
+- Complete commerce/catalog/fulfillment protocol
+- Mandatory blockchain/cryptocurrency
+- Mandatory payment provider
 
 ## Repository Structure
 
@@ -172,14 +144,15 @@ agent-pay/
 
 ## Security Principles
 
-- Least privilege and explicit authorization evidence
-- No primary financial credentials to agents
-- Tokenized/opaque payment instrument references
-- Server-side policy enforcement and fail-closed decisions
-- Multi-layer idempotency and replay protection
-- Authenticated provider webhooks
-- Immutable financial history and compensating corrections
-- Reconciliation for ambiguous external outcomes
+- Agent never owns user funds.
+- No primary financial credentials to agents.
+- Server-side financial authorization and fail-closed decisions.
+- Approval bound to the exact payment intent.
+- Provider credentials isolated behind protected adapters.
+- Financial operations idempotent and concurrency-safe.
+- Provider events authenticated, persisted, deduplicated, and replay-safe.
+- Financial history append-oriented with compensating corrections.
+- Ambiguous external outcomes reconciled rather than guessed.
 
 ## License
 
