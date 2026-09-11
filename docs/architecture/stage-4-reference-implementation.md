@@ -17,9 +17,11 @@ V1 is a modular monolith with explicit boundaries for:
 - double-entry journal/posting persistence
 - provider operations and external adapter boundary
 - payment execution worker semantics
-- idempotency
+- capture / void / refund lifecycle
+- idempotency across API, provider operations and transaction history
 - transactional outbox
-- future provider webhook/event integration
+- provider webhook/event integration primitives
+- settlement/reconciliation primitives
 
 The external provider call is deliberately outside the database transaction. A payment is reserved and marked for processing first; the provider is called; the result is then finalized in a new transaction. This prevents long-running database transactions while preserving explicit handling of ambiguous external outcomes.
 
@@ -38,8 +40,13 @@ The external provider call is deliberately outside the database transaction. A p
 11. transactional outbox persistence
 12. outbox row claiming with `FOR UPDATE SKIP LOCKED`
 13. provider operation idempotency persistence
-14. local Docker PostgreSQL bootstrap
-15. CI validation against PostgreSQL 16
+14. capture, void and refund operations use distinct stable provider idempotency keys
+15. transaction history is separate from payment state
+16. refunds are bounded by captured-minus-refunded amount under the database transaction
+17. refund ledger postings reverse the capture direction
+18. voids do not create a compensating ledger movement because an authorization is not a capture
+19. local Docker PostgreSQL bootstrap
+20. CI validation against PostgreSQL 16
 
 ## Deliberate limitations
 
@@ -48,7 +55,8 @@ This remains a reference implementation, not a production payment processor. It 
 - cryptographic verification of external authorization evidence
 - production OIDC/JWT verification and key rotation
 - real payment credentials or PCI-grade tokenization
-- real provider webhook signature verification and durable reconciliation processing
+- provider-specific authorization/capture/void/refund semantics
+- end-to-end signed webhook resolution of `UNKNOWN_EXTERNAL_OUTCOME`
 - settlement/reconciliation workers
 - a complete policy DSL and policy-version evaluation engine
 - distributed job scheduling/queue infrastructure
