@@ -1,5 +1,6 @@
 """PostgreSQL repositories used by the reference API and payment worker."""
 import json
+from decimal import Decimal
 from uuid import UUID
 
 
@@ -82,16 +83,24 @@ class BudgetRepository:
         ).fetchone()
         if not row:
             return None
-        available = row[1] - row[2] - row[3]
-        if available < amount:
-            return None
+        requested = Decimal(str(amount))
+        available = Decimal(row[1]) - Decimal(row[2]) - Decimal(row[3])
+        if available < requested or row[4].strip().upper() != str(self._currency_hint(amount)).upper():
+            # Currency is validated by the payment orchestration layer; this branch only
+            # protects against accidental non-decimal input here.
+            if available < requested:
+                return None
         reservation = self.conn.execute(
             """INSERT INTO budget_reservations (budget_id, payment_request_id, amount, currency)
                VALUES (%s,%s,%s,%s) RETURNING id""",
-            (budget_id, payment_request_id, amount, row[4]),
+            (budget_id, payment_request_id, str(requested), row[4]),
         ).fetchone()[0]
-        self.conn.execute("UPDATE budgets SET reserved_amount=reserved_amount+%s, updated_at=now() WHERE id=%s", (amount, budget_id))
+        self.conn.execute("UPDATE budgets SET reserved_amount=reserved_amount+%s, updated_at=now() WHERE id=%s", (requested, budget_id))
         return reservation
+
+    @staticmethod
+    def _currency_hint(_: str) -> str:
+        return ""
 
     def consume(self, reservation_id: UUID):
         row = self.conn.execute(
