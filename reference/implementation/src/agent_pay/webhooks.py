@@ -11,12 +11,14 @@ from uuid import UUID
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from .db import connection
+from .lifecycle_api import router as lifecycle_router
 from .provider_events import ProviderEventRepository, verify_hmac_signature
 from .settlement import SettlementRepository
 from .unit_of_work import UnitOfWork
 from .webhook_resolution import ProviderEventResolver
 
 router = APIRouter(tags=["providers"])
+router.include_router(lifecycle_router)
 
 
 def _secret_for(provider_name: str) -> str:
