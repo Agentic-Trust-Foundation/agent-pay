@@ -18,11 +18,12 @@ from .outbox import enqueue
 from .provider import MockProvider
 from .repositories import PaymentRepository
 from .unit_of_work import UnitOfWork
-from .webhooks import router as provider_router
+from .webhooks import provider_settlement, provider_webhook
 
 app = FastAPI(title="Agent-Pay Reference", version="0.5.0")
-app.include_router(provider_router)
 app.include_router(lifecycle_router)
+app.add_api_route("/v1/providers/{provider_name}/webhooks", provider_webhook, methods=["POST"], tags=["providers"])
+app.add_api_route("/v1/providers/{provider_name}/settlements", provider_settlement, methods=["POST"], tags=["providers"])
 
 
 @app.exception_handler(HTTPException)
