@@ -4,70 +4,69 @@
 
 The reference implementation demonstrates the protocol's financial-control invariants without making implementation details part of the protocol specification.
 
-## V1 implementation shape
+## Current implementation shape
 
-V1 uses a modular monolith with explicit boundaries for:
+V1 is a modular monolith with explicit boundaries for:
 
+- authenticated agent principal binding
 - payment domain/state transitions
 - policy evaluation
-- budget reservation
-- payment-provider adapters
+- PostgreSQL repositories
+- database transaction boundaries
+- budget reservation with row-level locking
+- double-entry journal/posting persistence
+- provider operations and external adapter boundary
+- payment execution worker semantics
 - idempotency
-- financial state recording
-- double-entry ledger
 - transactional outbox
-- PostgreSQL persistence
+- future provider webhook/event integration
 
-A production deployment may later extract these modules into services. That extraction is an operational decision and must not change protocol semantics.
+The external provider call is deliberately outside the database transaction. A payment is reserved and marked for processing first; the provider is called; the result is then finalized in a new transaction. This prevents long-running database transactions while preserving explicit handling of ambiguous external outcomes.
 
-## Current implemented controls
-
-The executable reference now demonstrates:
+## Implemented controls
 
 1. policy decisions: auto, notify, approval, deny
-2. concurrency-safe budget reservation in the in-memory domain and row-locked PostgreSQL repository
-3. provider-neutral execution through an adapter interface
-4. explicit `UNKNOWN_EXTERNAL_OUTCOME` for ambiguous provider results
-5. idempotency replay and idempotency-key conflict detection
-6. reservation release on a definitive provider failure
-7. budget consumption only after successful execution
-8. PostgreSQL transaction boundaries through a Unit of Work
-9. balanced double-entry journal validation and persistence primitives
-10. transactional outbox persistence with duplicate-tolerant event semantics
-11. FastAPI `POST /v1/payments` and payment lookup endpoints
-12. PostgreSQL-backed local Docker Compose environment
-13. CI validation against PostgreSQL 16 with the canonical schema plus Stage 4 migration
-
-## Persistence convergence
-
-`specs/v1/migrations/001_stage4_convergence.sql` adds the persistence models required by the Master Project Schema, including:
-
-- authorization evidence
-- policy versions
-- budget reservations
-- payment authentication
-- provider operations/events
-- settlement and reconciliation records
-- transactional outbox events
-- ledger journals and postings
-
-The legacy `ledger_entries` table remains for compatibility. New financial mutations are expected to converge on `ledger_journals` + `ledger_postings` as the authoritative double-entry model.
+2. PostgreSQL-backed payment requests and payments
+3. fail-closed authentication boundary for agent callers
+4. authenticated principal must match claimed agent/account
+5. concurrency-safe budget reservation using `SELECT ... FOR UPDATE`
+6. reservation consumption/release is idempotent
+7. provider-neutral execution through an adapter interface
+8. explicit `UNKNOWN_EXTERNAL_OUTCOME` for ambiguous provider results
+9. double-entry journal/posting validation and persistence
+10. ledger idempotency keys
+11. transactional outbox persistence
+12. outbox row claiming with `FOR UPDATE SKIP LOCKED`
+13. provider operation idempotency persistence
+14. local Docker PostgreSQL bootstrap
+15. CI validation against PostgreSQL 16
 
 ## Deliberate limitations
 
-This is not a production payment processor. It does not yet provide:
+This remains a reference implementation, not a production payment processor. It does not yet provide:
 
-- cryptographic authorization evidence verification
-- real payment credentials or tokenization
-- production provider webhooks and durable event processing workers
-- production settlement/reconciliation workers
-- a distributed message broker
-- production-grade authentication/authorization middleware
-- a full provider execution saga with asynchronous external outcome reconciliation
-- database-enforced cross-row journal balance constraints
+- cryptographic verification of external authorization evidence
+- production OIDC/JWT verification and key rotation
+- real payment credentials or PCI-grade tokenization
+- real provider webhook signature verification and durable reconciliation processing
+- settlement/reconciliation workers
+- a complete policy DSL and policy-version evaluation engine
+- distributed job scheduling/queue infrastructure
+- production risk/fraud controls
+- full approval UI/notification channels
 
-Those are the remaining Stage 4 hardening layers and must be added without weakening the architectural invariants in `docs/architecture/financial-control-invariants.md`.
+These are the next implementation layers and must be added without weakening the invariants in `docs/architecture/financial-control-invariants.md`.
+
+## Local execution
+
+From `reference/implementation/`:
+
+```bash
+docker compose up --build
+```
+
+The PostgreSQL container bootstraps the base schema and Stage 4 migrations. The API listens on port 8000. Development authentication is enabled only for the local reference stack and uses the explicitly configured development principal.
 
 ## Validation
 
-The implementation has executable tests under `reference/implementation/tests/` and GitHub Actions validates the reference implementation against PostgreSQL 16 on pushes to `main` and pull requests.
+The implementation has executable unit and PostgreSQL integration tests under `reference/implementation/tests/`. GitHub Actions starts PostgreSQL 16, applies the canonical schema plus Stage 4 migrations, and runs the complete test suite on pushes to `main` and pull requests.
