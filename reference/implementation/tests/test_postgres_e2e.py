@@ -89,38 +89,37 @@ def test_postgres_timeout_webhook_settlement_e2e():
         body, _ = provider.webhook(str(payment_id))
         payload = json.loads(body)
 
-        with conn.transaction():
-            event_id = ProviderEventRepository(conn).record(
-                provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"],
-                payload=payload, signature_valid=True,
-            )
-            conn.execute("UPDATE provider_events SET provider_operation_id=%s WHERE id=%s", (operation_id, event_id))
-            result = ProviderEventResolver(conn).resolve(
-                event_id=event_id,
-                provider_operation_id=operation_id,
-                outcome="SUCCEEDED",
-                provider_reference=payload["provider_reference"],
-                customer_ledger_account_id=customer_ledger,
-                clearing_ledger_account_id=clearing_ledger,
-                correlation_id="e2e",
-            )
-            assert result == "RESOLVED"
-            assert conn.execute("SELECT status, provider_reference FROM payments WHERE id=%s", (payment_id,)).fetchone() == (
-                "SUCCEEDED", payload["provider_reference"]
-            )
-            assert conn.execute("SELECT status FROM budget_reservations WHERE id=%s", (reservation_id,)).fetchone()[0] == "CONSUMED"
-            totals = conn.execute(
-                """SELECT side, sum(amount) FROM ledger_postings lp
-                   JOIN ledger_journals lj ON lj.id=lp.journal_id
-                   WHERE lj.reference_id=%s GROUP BY side ORDER BY side""",
-                (payment_id,),
-            ).fetchall()
-            assert totals == [("CREDIT", Decimal("25.0000")), ("DEBIT", Decimal("25.0000"))]
-            duplicate = ProviderEventRepository(conn).record(
-                provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"],
-                payload=payload, signature_valid=True,
-            )
-            assert duplicate is None
+        event_id = ProviderEventRepository(conn).record(
+            provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"],
+            payload=payload, signature_valid=True,
+        )
+        conn.execute("UPDATE provider_events SET provider_operation_id=%s WHERE id=%s", (operation_id, event_id))
+        result = ProviderEventResolver(conn).resolve(
+            event_id=event_id,
+            provider_operation_id=operation_id,
+            outcome="SUCCEEDED",
+            provider_reference=payload["provider_reference"],
+            customer_ledger_account_id=customer_ledger,
+            clearing_ledger_account_id=clearing_ledger,
+            correlation_id="e2e",
+        )
+        assert result == "RESOLVED"
+        assert conn.execute("SELECT status, provider_reference FROM payments WHERE id=%s", (payment_id,)).fetchone() == (
+            "SUCCEEDED", payload["provider_reference"]
+        )
+        assert conn.execute("SELECT status FROM budget_reservations WHERE id=%s", (reservation_id,)).fetchone()[0] == "CONSUMED"
+        totals = conn.execute(
+            """SELECT side, sum(amount) FROM ledger_postings lp
+               JOIN ledger_journals lj ON lj.id=lp.journal_id
+               WHERE lj.reference_id=%s GROUP BY side ORDER BY side""",
+            (payment_id,),
+        ).fetchall()
+        assert totals == [("CREDIT", Decimal("25.0000")), ("DEBIT", Decimal("25.0000"))]
+        duplicate = ProviderEventRepository(conn).record(
+            provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"],
+            payload=payload, signature_valid=True,
+        )
+        assert duplicate is None
 
         settlement = provider.settlement(str(payment_id))
         assert SettlementRepository(conn).ingest(
