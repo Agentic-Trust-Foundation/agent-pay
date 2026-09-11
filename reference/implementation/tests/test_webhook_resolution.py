@@ -1,4 +1,3 @@
-from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -13,6 +12,12 @@ def test_invalid_event_is_rejected():
                 def fetchone(self):
                     return ('RECEIVED', False)
             return Result()
+
+        def rollback(self):
+            pass
+
+        def commit(self):
+            pass
 
     with pytest.raises(PermissionError):
         ProviderEventResolver(Conn()).resolve(
