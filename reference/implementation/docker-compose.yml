@@ -39,7 +39,7 @@ services:
 
   worker:
     build: .
-    command: ["python", "-m", "agent_pay.worker_runner"]
+    command: ["sh", "-c", "while true; do python -m agent_pay.worker_runner; sleep 2; done"]
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agent_pay
       AGENT_PAY_MOCK_OUTCOME: SUCCEEDED
