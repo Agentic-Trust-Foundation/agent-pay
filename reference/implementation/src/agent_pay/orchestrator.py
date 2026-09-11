@@ -5,7 +5,6 @@ state machine is: persist intent/reservation -> execute provider -> finalize in 
 new transaction. Ambiguous provider outcomes remain UNKNOWN_EXTERNAL_OUTCOME.
 """
 from decimal import Decimal
-import json
 from uuid import UUID
 
 from .ledger import post_journal
@@ -41,7 +40,12 @@ class PaymentOrchestrator:
         return reservation_id
 
     def execute_external(self, *, payment_id: UUID, amount: Decimal, currency: str) -> ProviderOutcome:
-        return self.provider.charge(str(payment_id), int(amount * Decimal("100")), currency)
+        return self.provider.charge(
+            str(payment_id),
+            int(amount * Decimal("100")),
+            currency,
+            f"payment:{payment_id}:charge",
+        )
 
     def finalize(self, *, payment_id: UUID, payment_request_id: UUID, reservation_id: UUID,
                  amount: Decimal, currency: str, customer_ledger_account_id: UUID,
