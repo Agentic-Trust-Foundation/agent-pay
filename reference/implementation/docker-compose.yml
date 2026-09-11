@@ -7,6 +7,12 @@ services:
       POSTGRES_DB: agent_pay
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../specs/v1/database-schema.sql:/docker-entrypoint-initdb.d/10-base-schema.sql:ro
+      - ../../specs/v1/migrations/001_stage4_convergence.sql:/docker-entrypoint-initdb.d/20-stage4-convergence.sql:ro
+      - ../../specs/v1/migrations/002_ledger_accounts.sql:/docker-entrypoint-initdb.d/30-ledger-accounts.sql:ro
+      - ./docker-entrypoint-initdb.d/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agent_pay"]
       interval: 5s
@@ -17,8 +23,15 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agent_pay
+      AGENT_PAY_AUTH_MODE: development
+      AGENT_PAY_DEV_TOKEN: local-agent-token
+      AGENT_PAY_DEV_AGENT_ID: 00000000-0000-0000-0000-000000000001
+      AGENT_PAY_DEV_ACCOUNT_ID: 00000000-0000-0000-0000-000000000002
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+
+volumes:
+  postgres_data:
