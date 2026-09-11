@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 
@@ -19,7 +19,11 @@ class PaymentProvider:
 class MockProvider(PaymentProvider):
     outcome: ProviderOutcome = ProviderOutcome.SUCCEEDED
     calls: int = 0
+    _results: dict[str, ProviderOutcome] = field(default_factory=dict)
 
     def charge(self, payment_id: str, amount_minor: int, currency: str, idempotency_key: str) -> ProviderOutcome:
+        if idempotency_key in self._results:
+            return self._results[idempotency_key]
         self.calls += 1
+        self._results[idempotency_key] = self.outcome
         return self.outcome
