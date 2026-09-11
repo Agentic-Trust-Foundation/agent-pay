@@ -106,10 +106,14 @@ class PaymentLifecycle:
                customer_ledger_account_id: UUID, clearing_ledger_account_id: UUID,
                correlation_id: str | None = None) -> str:
         key = f"payment:{payment_id}:refund:{amount}:{currency}"
-        row = self.payments.get_payment(payment_id)
-        if not row:
+        # Serialize refunds for one payment so two concurrent callers cannot
+        # both observe the same remaining refundable amount.
+        locked = self.conn.execute(
+            "SELECT status FROM payments WHERE id=%s FOR UPDATE", (payment_id,)
+        ).fetchone()
+        if not locked:
             raise ValueError("payment not found")
-        if row[4] not in ("SUCCEEDED", "REFUND_FAILED"):
+        if locked[0] not in ("SUCCEEDED", "REFUND_FAILED"):
             raise ValueError("only a captured payment can be refunded")
         captured = self.conn.execute(
             """SELECT COALESCE(SUM(amount),0) FROM transactions
@@ -119,14 +123,15 @@ class PaymentLifecycle:
             """SELECT COALESCE(SUM(amount),0) FROM transactions
                WHERE payment_id=%s AND type='REFUND' AND status='POSTED'""", (payment_id,)
         ).fetchone()[0]
-        if Decimal(str(amount)) <= 0 or Decimal(str(amount)) > Decimal(str(captured)) - Decimal(str(refunded)):
+        amount_d = Decimal(str(amount))
+        if amount_d <= 0 or amount_d > Decimal(str(captured)) - Decimal(str(refunded)):
             raise ValueError("refund amount exceeds refundable captured amount")
         self.payments.update_status(payment_id, "REFUND_PROCESSING")
         self._operation(payment_id, "REFUND", key)
-        refund_id = self._create_transaction(payment_id=payment_id, type_="REFUND", amount=amount,
+        refund_id = self._create_transaction(payment_id=payment_id, type_="REFUND", amount=amount_d,
                                              currency=currency, idempotency_key=f"tx:{payment_id}:refund:{amount}:{currency}",
                                              status="PENDING")
-        outcome = self.provider.refund(str(payment_id), self._amount_minor(amount), currency, key)
+        outcome = self.provider.refund(str(payment_id), self._amount_minor(amount_d), currency, key)
         if outcome == ProviderOutcome.UNKNOWN:
             self.payments.update_status(payment_id, "UNKNOWN_EXTERNAL_OUTCOME")
             return "UNKNOWN_EXTERNAL_OUTCOME"
@@ -139,8 +144,8 @@ class PaymentLifecycle:
             self.conn, currency=currency, reference_type="TRANSACTION", reference_id=refund_id,
             idempotency_key=key, correlation_id=correlation_id,
             postings=[
-                {"ledger_account_id": clearing_ledger_account_id, "side": "DEBIT", "amount": str(amount), "currency": currency},
-                {"ledger_account_id": customer_ledger_account_id, "side": "CREDIT", "amount": str(amount), "currency": currency},
+                {"ledger_account_id": clearing_ledger_account_id, "side": "DEBIT", "amount": str(amount_d), "currency": currency},
+                {"ledger_account_id": customer_ledger_account_id, "side": "CREDIT", "amount": str(amount_d), "currency": currency},
             ],
         )
         self.payments.update_status(payment_id, "REFUNDED")
