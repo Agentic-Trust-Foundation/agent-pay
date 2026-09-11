@@ -17,7 +17,6 @@ services:
       - ../../specs/v1/migrations/005_reconciliation_integrity.sql:/docker-entrypoint-initdb.d/60-reconciliation-integrity.sql:ro
       - ../../specs/v1/migrations/006_payment_lifecycle.sql:/docker-entrypoint-initdb.d/70-payment-lifecycle.sql:ro
       - ../../specs/v1/migrations/007_settlement_reconciliation_integrity.sql:/docker-entrypoint-initdb.d/80-settlement-reconciliation-integrity.sql:ro
-      - ./docker-entrypoint-initdb.d/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agent_pay"]
       interval: 5s
