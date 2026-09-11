@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .auth import require_agent, resolve_bearer
 from .db import connection
 from .lifecycle import PaymentLifecycle
 from .provider import MockProvider
@@ -16,6 +17,27 @@ router = APIRouter(tags=["Payment Lifecycle"])
 class LifecycleAmount(BaseModel):
     amount: str = Field(pattern=r"^\d+(\.\d{1,4})?$")
     currency: str = Field(min_length=3, max_length=3)
+
+
+def _authenticate_payment(conn, payment_id: UUID, authorization: str | None) -> None:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bearer authentication is required")
+    try:
+        principal = resolve_bearer(authorization[7:].strip())
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    row = conn.execute(
+        """SELECT pr.agent_id, pr.account_id
+             FROM payments p JOIN payment_requests pr ON pr.id=p.payment_request_id
+            WHERE p.id=%s""",
+        (payment_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="payment not found")
+    try:
+        require_agent(principal, str(row[0]), str(row[1]))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 def _accounts(conn, payment_id: UUID):
@@ -39,8 +61,9 @@ def _accounts(conn, payment_id: UUID):
     return UUID(str(row[0])), UUID(str(row[1]))
 
 
-def _run(payment_id: UUID, amount: LifecycleAmount, operation: str, correlation_id: str | None):
+def _run(payment_id: UUID, amount: LifecycleAmount, operation: str, authorization: str | None, correlation_id: str | None):
     with connection() as conn:
+        _authenticate_payment(conn, payment_id, authorization)
         with UnitOfWork(conn):
             accounts = _accounts(conn, payment_id)
             lifecycle = PaymentLifecycle(conn, MockProvider())
@@ -60,14 +83,14 @@ def _run(payment_id: UUID, amount: LifecycleAmount, operation: str, correlation_
 
 @router.post("/v1/payments/{payment_id}/capture", status_code=202)
 def capture(payment_id: UUID, amount: LifecycleAmount, authorization: str | None = Header(default=None, alias="Authorization"), correlation_id: str | None = Header(default=None, alias="X-Correlation-ID")):
-    return _run(payment_id, amount, "capture", correlation_id)
+    return _run(payment_id, amount, "capture", authorization, correlation_id)
 
 
 @router.post("/v1/payments/{payment_id}/void", status_code=202)
 def void(payment_id: UUID, amount: LifecycleAmount, authorization: str | None = Header(default=None, alias="Authorization"), correlation_id: str | None = Header(default=None, alias="X-Correlation-ID")):
-    return _run(payment_id, amount, "void", correlation_id)
+    return _run(payment_id, amount, "void", authorization, correlation_id)
 
 
 @router.post("/v1/payments/{payment_id}/refund", status_code=202)
 def refund(payment_id: UUID, amount: LifecycleAmount, authorization: str | None = Header(default=None, alias="Authorization"), correlation_id: str | None = Header(default=None, alias="X-Correlation-ID")):
-    return _run(payment_id, amount, "refund", correlation_id)
+    return _run(payment_id, amount, "refund", authorization, correlation_id)
