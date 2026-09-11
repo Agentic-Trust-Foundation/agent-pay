@@ -46,10 +46,12 @@ class PaymentService:
         return result
 
     def _execute(self, intent: PaymentIntent, decision: Decision) -> PaymentResult:
+        provider_key = f"payment:{intent.payment_id}:charge"
         outcome = self.provider.charge(
             intent.payment_id,
             int(intent.amount.value * Decimal("100")),
             intent.amount.currency,
+            provider_key,
         )
         if outcome == ProviderOutcome.SUCCEEDED:
             self.budget.consume(intent.amount.value)
