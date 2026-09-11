@@ -4,7 +4,9 @@ import json
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .auth import require_agent, resolve_approval_bearer, resolve_bearer
@@ -17,8 +19,42 @@ from .repositories import PaymentRepository
 from .unit_of_work import UnitOfWork
 from .webhooks import router as provider_router
 
-app = FastAPI(title="Agent-Pay Reference", version="0.4.0")
+app = FastAPI(title="Agent-Pay Reference", version="0.5.0")
 app.include_router(provider_router)
+
+
+@app.exception_handler(HTTPException)
+async def problem_details_http_exception(request: Request, exc: HTTPException):
+    detail = exc.detail if isinstance(exc.detail, str) else "request failed"
+    titles = {400: "Bad Request", 401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 409: "Conflict"}
+    return JSONResponse(
+        status_code=exc.status_code,
+        media_type="application/problem+json",
+        content={
+            "type": f"https://agent-pay.dev/problems/http-{exc.status_code}",
+            "title": titles.get(exc.status_code, "HTTP Error"),
+            "status": exc.status_code,
+            "detail": detail,
+            "instance": str(request.url.path),
+        },
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def problem_details_validation_exception(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        media_type="application/problem+json",
+        content={
+            "type": "https://agent-pay.dev/problems/validation-error",
+            "title": "Validation Error",
+            "status": 422,
+            "detail": "request validation failed",
+            "instance": str(request.url.path),
+            "errors": exc.errors(),
+        },
+    )
 
 
 class Money(BaseModel):
