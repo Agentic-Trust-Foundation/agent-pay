@@ -3,18 +3,19 @@ from decimal import Decimal
 from uuid import uuid4
 
 import psycopg
+import pytest
 
 from agent_pay.db import connection
 from agent_pay.ledger import post_journal
 from agent_pay.outbox import enqueue
 
 
-pytestmark = []
+pytestmark = pytest.mark.integration
 
 
 def test_postgres_double_entry_and_outbox():
     if not os.getenv("DATABASE_URL"):
-        return
+        pytest.skip("DATABASE_URL is required for PostgreSQL integration tests")
 
     with connection() as conn:
         with conn.transaction():
