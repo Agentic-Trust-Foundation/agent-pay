@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -7,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 VECTORS = ROOT / "conformance" / "v1" / "payment-control-vectors.yaml"
 
 
+@pytest.mark.conformance
 def test_v1_vectors_are_machine_readable_and_complete():
     document = yaml.safe_load(VECTORS.read_text(encoding="utf-8"))
     assert document["version"] == 1
