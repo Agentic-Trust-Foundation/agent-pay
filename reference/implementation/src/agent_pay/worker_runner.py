@@ -24,29 +24,26 @@ def run_once(limit: int = 25) -> int:
     processed = 0
     for payment_id in payment_ids:
         with connection() as conn:
-            with UnitOfWork(conn):
-                accounts = conn.execute(
-                    """SELECT la.id,
-                              (SELECT ppa.ledger_account_id FROM payment_provider_accounts ppa
-                               WHERE ppa.provider_name=%s AND ppa.currency=%s AND ppa.status='ACTIVE')
-                       FROM payments p
-                       JOIN payment_requests pr ON pr.id=p.payment_request_id
-                       JOIN wallets w ON w.account_id=pr.account_id AND w.currency=p.currency AND w.status='ACTIVE'
-                       JOIN ledger_accounts la ON la.wallet_id=w.id
-                       WHERE p.id=%s
-                       LIMIT 1""",
-                    ("mock", _payment_currency(conn, payment_id), payment_id),
-                ).fetchone()
-                if not accounts or not accounts[0] or not accounts[1]:
-                    raise RuntimeError("customer wallet ledger account or provider clearing account is missing")
-                process_one(
-                    conn=conn,
-                    payment_id=UUID(str(payment_id)),
-                    provider=provider,
-                    customer_ledger_account_id=UUID(str(accounts[0])),
-                    clearing_ledger_account_id=UUID(str(accounts[1])),
-                )
-                processed += 1
+            currency = _payment_currency(conn, payment_id)
+            accounts = conn.execute(
+                """SELECT la.id,
+                          (SELECT ppa.ledger_account_id FROM payment_provider_accounts ppa
+                           WHERE ppa.provider_name=%s AND ppa.currency=%s AND ppa.status='ACTIVE')
+                   FROM payments p
+                   JOIN payment_requests pr ON pr.id=p.payment_request_id
+                   JOIN wallets w ON w.account_id=pr.account_id AND w.currency=p.currency AND w.status='ACTIVE'
+                   JOIN ledger_accounts la ON la.wallet_id=w.id
+                   WHERE p.id=%s LIMIT 1""",
+                ("mock", currency, payment_id),
+            ).fetchone()
+            if not accounts or not accounts[0] or not accounts[1]:
+                raise RuntimeError("customer wallet ledger account or provider clearing account is missing")
+            process_one(
+                conn=conn, payment_id=UUID(str(payment_id)), provider=provider,
+                customer_ledger_account_id=UUID(str(accounts[0])),
+                clearing_ledger_account_id=UUID(str(accounts[1])),
+            )
+            processed += 1
     return processed
 
 
