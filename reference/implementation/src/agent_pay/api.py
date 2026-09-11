@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from .auth import require_agent, resolve_approval_bearer, resolve_bearer
 from .control import ControlRepository
 from .db import connection
-from .lifecycle_api import router as lifecycle_router
+from .lifecycle_api import capture, refund, void
 from .orchestrator import PaymentOrchestrator
 from .outbox import enqueue
 from .provider import MockProvider
@@ -21,7 +21,9 @@ from .unit_of_work import UnitOfWork
 from .webhooks import provider_settlement, provider_webhook
 
 app = FastAPI(title="Agent-Pay Reference", version="0.5.0")
-app.include_router(lifecycle_router)
+app.add_api_route("/v1/payments/{payment_id}/capture", capture, methods=["POST"], status_code=202, tags=["Payment Lifecycle"])
+app.add_api_route("/v1/payments/{payment_id}/void", void, methods=["POST"], status_code=202, tags=["Payment Lifecycle"])
+app.add_api_route("/v1/payments/{payment_id}/refund", refund, methods=["POST"], status_code=202, tags=["Payment Lifecycle"])
 app.add_api_route("/v1/providers/{provider_name}/webhooks", provider_webhook, methods=["POST"], tags=["providers"])
 app.add_api_route("/v1/providers/{provider_name}/settlements", provider_settlement, methods=["POST"], tags=["providers"])
 
