@@ -2,7 +2,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from .domain import Money, PaymentIntent
+from .domain import Decision, Money, PaymentIntent
 from .policy import SpendingPolicy
 
 
@@ -13,13 +13,13 @@ class ControlRepository:
     def active_policy(self, account_id: UUID, policy_id: UUID | None = None):
         if policy_id:
             return self.conn.execute(
-                """SELECT p.id, pv.id, pv.version, pv.rules
-                   FROM policies p JOIN policy_versions pv ON pv.policy_id=p.id
+                """SELECT p.id, pv.id, pv.version, pv.rules FROM policies p
+                   JOIN policy_versions pv ON pv.policy_id=p.id
                    WHERE p.id=%s AND p.account_id=%s AND p.status='ACTIVE' AND pv.status='ACTIVE'
                    ORDER BY pv.version DESC LIMIT 1""", (policy_id, account_id)).fetchone()
         return self.conn.execute(
-            """SELECT p.id, pv.id, pv.version, pv.rules
-               FROM policies p JOIN policy_versions pv ON pv.policy_id=p.id
+            """SELECT p.id, pv.id, pv.version, pv.rules FROM policies p
+               JOIN policy_versions pv ON pv.policy_id=p.id
                WHERE p.account_id=%s AND p.status='ACTIVE' AND pv.status='ACTIVE'
                ORDER BY p.updated_at DESC, pv.version DESC LIMIT 1""", (account_id,)).fetchone()
 
@@ -29,14 +29,14 @@ class ControlRepository:
                         category: str | None):
         row = self.active_policy(account_id, policy_id)
         if not row:
-            raise LookupError("no active policy found for account")
+            return Decision.DENY, None, None
         _, version_id, version, rules = row
         intent = PaymentIntent(str(payment_id), str(agent_id), Money(amount, currency), merchant_domain, "")
         decision = SpendingPolicy.from_rules(rules).evaluate(intent, category=category)
         self.conn.execute("UPDATE payment_requests SET policy_version_id=%s WHERE id=%s", (version_id, payment_request_id))
         return decision, version_id, version
 
-    def select_budget(self, account_id: UUID, budget_id: UUID | None, currency: str, policy_id: UUID):
+    def select_budget(self, account_id: UUID, budget_id: UUID | None, currency: str, policy_id: UUID | None):
         if budget_id:
             row = self.conn.execute(
                 """SELECT id FROM budgets WHERE id=%s AND account_id=%s AND currency=%s
