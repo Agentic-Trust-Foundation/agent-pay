@@ -1,3 +1,4 @@
+import json
 import os
 from decimal import Decimal
 from uuid import uuid4
@@ -5,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from agent_pay.db import connection
+from agent_pay.provider import ProviderOutcome
 from agent_pay.provider_events import ProviderEventRepository
 from agent_pay.settlement import SettlementRepository
 from agent_pay.simulator import ProviderSimulator
@@ -74,22 +76,17 @@ def test_postgres_timeout_webhook_settlement_e2e():
                    VALUES (%s,%s,%s,%s) RETURNING id""",
                 (budget_id, request_id, amount, currency),
             ).fetchone()[0]
-            conn.execute(
-                "UPDATE budgets SET reserved_amount=%s WHERE id=%s", (amount, budget_id)
-            )
-            conn.execute(
-                "UPDATE payment_requests SET budget_reservation_id=%s WHERE id=%s", (reservation_id, request_id)
-            )
+            conn.execute("UPDATE budgets SET reserved_amount=%s WHERE id=%s", (amount, budget_id))
+            conn.execute("UPDATE payment_requests SET budget_reservation_id=%s WHERE id=%s", (reservation_id, request_id))
             operation_id = conn.execute(
                 """INSERT INTO provider_operations (payment_id, operation_type, idempotency_key, status)
                    VALUES (%s,'CHARGE',%s,'PENDING') RETURNING id""",
                 (payment_id, f"payment:{payment_id}:charge"),
             ).fetchone()[0]
 
-        observed = provider.charge(str(payment_id), amount, currency, outcome=provider.UNKNOWN if False else None)
-        assert observed is not None
+        observed = provider.charge(str(payment_id), amount, currency, outcome=ProviderOutcome.UNKNOWN)
+        assert observed == ProviderOutcome.UNKNOWN
         body, _ = provider.webhook(str(payment_id))
-        import json
         payload = json.loads(body)
 
         with conn.transaction():
@@ -97,9 +94,7 @@ def test_postgres_timeout_webhook_settlement_e2e():
                 provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"],
                 payload=payload, signature_valid=True,
             )
-            conn.execute(
-                "UPDATE provider_events SET provider_operation_id=%s WHERE id=%s", (operation_id, event_id)
-            )
+            conn.execute("UPDATE provider_events SET provider_operation_id=%s WHERE id=%s", (operation_id, event_id))
             result = ProviderEventResolver(conn).resolve(
                 event_id=event_id,
                 provider_operation_id=operation_id,
@@ -110,17 +105,17 @@ def test_postgres_timeout_webhook_settlement_e2e():
                 correlation_id="e2e",
             )
             assert result == "RESOLVED"
-
-            payment = conn.execute("SELECT status, provider_reference FROM payments WHERE id=%s", (payment_id,)).fetchone()
-            assert payment == ("SUCCEEDED", payload["provider_reference"])
-            reservation = conn.execute("SELECT status FROM budget_reservations WHERE id=%s", (reservation_id,)).fetchone()
-            assert reservation[0] == "CONSUMED"
+            assert conn.execute("SELECT status, provider_reference FROM payments WHERE id=%s", (payment_id,)).fetchone() == (
+                "SUCCEEDED", payload["provider_reference"]
+            )
+            assert conn.execute("SELECT status FROM budget_reservations WHERE id=%s", (reservation_id,)).fetchone()[0] == "CONSUMED"
             totals = conn.execute(
-                "SELECT side, sum(amount) FROM ledger_postings lp JOIN ledger_journals lj ON lj.id=lp.journal_id WHERE lj.reference_id=%s GROUP BY side ORDER BY side",
+                """SELECT side, sum(amount) FROM ledger_postings lp
+                   JOIN ledger_journals lj ON lj.id=lp.journal_id
+                   WHERE lj.reference_id=%s GROUP BY side ORDER BY side""",
                 (payment_id,),
             ).fetchall()
             assert totals == [("CREDIT", Decimal("25.0000")), ("DEBIT", Decimal("25.0000"))]
-
             duplicate = ProviderEventRepository(conn).record(
                 provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"],
                 payload=payload, signature_valid=True,
@@ -128,18 +123,17 @@ def test_postgres_timeout_webhook_settlement_e2e():
             assert duplicate is None
 
         settlement = provider.settlement(str(payment_id))
-        with conn.transaction():
-            assert SettlementRepository(conn).ingest(
-                provider_name="mock",
-                settlement_reference=settlement["settlement_reference"],
-                provider_reference=settlement["provider_reference"],
-                observed_amount=settlement["amount"],
-                observed_currency=settlement["currency"],
-            ) == "MATCHED"
-            assert SettlementRepository(conn).ingest(
-                provider_name="mock",
-                settlement_reference=settlement["settlement_reference"],
-                provider_reference=settlement["provider_reference"],
-                observed_amount=settlement["amount"],
-                observed_currency=settlement["currency"],
-            ) == "DUPLICATE"
+        assert SettlementRepository(conn).ingest(
+            provider_name="mock",
+            settlement_reference=settlement["settlement_reference"],
+            provider_reference=settlement["provider_reference"],
+            observed_amount=settlement["amount"],
+            observed_currency=settlement["currency"],
+        ) == "MATCHED"
+        assert SettlementRepository(conn).ingest(
+            provider_name="mock",
+            settlement_reference=settlement["settlement_reference"],
+            provider_reference=settlement["provider_reference"],
+            observed_amount=settlement["amount"],
+            observed_currency=settlement["currency"],
+        ) == "DUPLICATE"
