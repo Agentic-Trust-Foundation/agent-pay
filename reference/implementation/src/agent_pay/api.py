@@ -1,4 +1,6 @@
 """FastAPI surface for the PostgreSQL-backed reference implementation."""
+import hashlib
+import json
 from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException
@@ -25,7 +27,7 @@ class Merchant(BaseModel):
 class PaymentItem(BaseModel):
     name: str
     quantity: int = Field(gt=0)
-    unit_price: str
+    unit_price: str = Field(pattern=r"^\d+(\.\d{1,4})?$")
 
 
 class CreatePayment(BaseModel):
@@ -33,8 +35,18 @@ class CreatePayment(BaseModel):
     account_id: UUID
     merchant: Merchant | None = None
     amount: Money
-    purpose: str
-    items: list[PaymentItem] = []
+    purpose: str = Field(min_length=1, max_length=500)
+    items: list[PaymentItem] = Field(default_factory=list)
+
+
+def request_fingerprint(request: CreatePayment) -> str:
+    """Stable hash of all material payment intent fields except the idempotency key."""
+    canonical = json.dumps(
+        request.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 @app.get("/healthz")
@@ -49,8 +61,10 @@ def create_payment(
     correlation_id: str | None = Header(default=None, alias="X-Correlation-ID"),
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
-    if not idempotency_key:
+    if not idempotency_key or not idempotency_key.strip():
         raise HTTPException(status_code=400, detail="Idempotency-Key is required")
+    if len(idempotency_key) > 255:
+        raise HTTPException(status_code=400, detail="Idempotency-Key is too long")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Bearer authentication is required")
     try:
@@ -59,11 +73,18 @@ def create_payment(
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
+    fingerprint = request_fingerprint(request)
+
     with connection() as conn:
         with UnitOfWork(conn):
             repo = PaymentRepository(conn)
             existing = repo.find_by_idempotency(request.account_id, idempotency_key)
             if existing:
+                if existing[5] and existing[5] != fingerprint:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="idempotency key was already used with a different payment request",
+                    )
                 payment = conn.execute(
                     "SELECT id, status FROM payments WHERE payment_request_id=%s", (existing[0],)
                 ).fetchone()
@@ -79,6 +100,7 @@ def create_payment(
                 purpose=request.purpose,
                 items=[i.model_dump() for i in request.items],
                 idempotency_key=idempotency_key,
+                request_fingerprint=fingerprint,
             )
             payment_id = repo.create_payment(
                 request_id=request_id,
