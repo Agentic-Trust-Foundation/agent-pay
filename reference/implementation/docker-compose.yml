@@ -13,6 +13,7 @@ services:
       - ../../specs/v1/migrations/001_stage4_convergence.sql:/docker-entrypoint-initdb.d/20-stage4-convergence.sql:ro
       - ../../specs/v1/migrations/002_ledger_accounts.sql:/docker-entrypoint-initdb.d/30-ledger-accounts.sql:ro
       - ../../specs/v1/migrations/003_execution_integrity.sql:/docker-entrypoint-initdb.d/40-execution-integrity.sql:ro
+      - ../../specs/v1/migrations/004_control_binding.sql:/docker-entrypoint-initdb.d/50-control-binding.sql:ro
       - ./docker-entrypoint-initdb.d/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agent_pay"]
@@ -26,6 +27,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agent_pay
       AGENT_PAY_AUTH_MODE: development
       AGENT_PAY_DEV_TOKEN: local-agent-token
+      AGENT_PAY_APPROVAL_TOKEN: local-approval-token
+      AGENT_PAY_APPROVAL_ACTOR: local-user
       AGENT_PAY_DEV_AGENT_ID: 00000000-0000-0000-0000-000000000001
       AGENT_PAY_DEV_ACCOUNT_ID: 00000000-0000-0000-0000-000000000002
     ports:
