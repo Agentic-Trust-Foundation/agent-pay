@@ -1,8 +1,7 @@
 """Authentication boundary for the reference implementation.
 
-The reference implementation deliberately keeps credential verification outside the
-payment domain. Production deployments should replace the development resolver with
-OIDC/JWT verification and bind the authenticated principal to the claimed agent.
+Production deployments should replace these development resolvers with OIDC/JWT
+verification, separate human approval authentication, and policy-aware authorization.
 """
 from dataclasses import dataclass
 import os
@@ -26,8 +25,16 @@ def resolve_bearer(token: str | None) -> Principal:
         if not agent_id or not account_id:
             raise PermissionError("development principal is not configured")
         return Principal(agent_id, account_id, frozenset({"payments:create", "payments:read"}))
-
     raise PermissionError("production authentication adapter is not configured")
+
+
+def resolve_approval_bearer(token: str | None) -> str:
+    if os.getenv("AGENT_PAY_AUTH_MODE", "strict") != "development":
+        raise PermissionError("production approval authentication adapter is not configured")
+    expected = os.getenv("AGENT_PAY_APPROVAL_TOKEN", "local-approval-token")
+    if token != expected:
+        raise PermissionError("invalid development approval bearer token")
+    return os.getenv("AGENT_PAY_APPROVAL_ACTOR", "local-user")
 
 
 def require_agent(principal: Principal, claimed_agent_id: str, claimed_account_id: str) -> None:
