@@ -1,0 +1,3 @@
+version: 1
+suite: agent-pay-financial-control-v1
+purpose: Behavioral conformance vectors for financial-control invariants.
