@@ -1,0 +1,6 @@
+-- Agent-Pay V1 Stage 3 convergence migration.
+-- See docs/architecture/stage-3-consistency-convergence-2026-09.md.
+-- This file is the additive migration target for authorization evidence,
+-- policy versions, budget reservations, payment authentication, provider
+-- operations/events, settlement/reconciliation, transactional outbox, and
+-- double-entry-ready ledger journals/postings.
