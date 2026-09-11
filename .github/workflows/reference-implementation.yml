@@ -28,6 +28,8 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agent_pay
       AGENT_PAY_AUTH_MODE: development
       AGENT_PAY_DEV_TOKEN: ci-agent-token
+      AGENT_PAY_APPROVAL_TOKEN: ci-approval-token
+      AGENT_PAY_APPROVAL_ACTOR: ci-user
       AGENT_PAY_DEV_AGENT_ID: 00000000-0000-0000-0000-000000000001
       AGENT_PAY_DEV_ACCOUNT_ID: 00000000-0000-0000-0000-000000000002
     steps:
@@ -44,5 +46,6 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/001_stage4_convergence.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/002_ledger_accounts.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/003_execution_integrity.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/004_control_binding.sql
       - name: Run reference tests
         run: pytest -q
