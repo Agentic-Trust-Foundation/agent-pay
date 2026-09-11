@@ -38,28 +38,28 @@ def test_postgres_timeout_webhook_settlement_e2e():
                 (account_id, currency),
             ).fetchone()[0]
             customer_ledger = conn.execute(
-                "INSERT INTO ledger_accounts (wallet_id, currency, account_type, name) VALUES (%s,%s,'CUSTOMER','e2e-customer') RETURNING id",
-                (wallet_id, currency),
+                "INSERT INTO ledger_accounts (wallet_id, currency, account_type, name) VALUES (%s,%s,'CUSTOMER',%s) RETURNING id",
+                (wallet_id, currency, f"e2e-customer-{uuid4()}"),
             ).fetchone()[0]
             clearing_ledger = conn.execute(
-                "INSERT INTO ledger_accounts (currency, account_type, name) VALUES (%s,'CLEARING','e2e-clearing') RETURNING id",
-                (currency, "e2e-clearing"),
+                "INSERT INTO ledger_accounts (currency, account_type, name) VALUES (%s,'CLEARING',%s) RETURNING id",
+                (currency, f"e2e-clearing-{uuid4()}"),
             ).fetchone()[0]
             conn.execute(
                 "INSERT INTO payment_provider_accounts (provider_name, currency, ledger_account_id) VALUES ('mock',%s,%s)",
                 (currency, clearing_ledger),
             )
             policy_id = conn.execute(
-                "INSERT INTO policies (account_id, name, rules) VALUES (%s,'e2e-policy',%s::jsonb) RETURNING id",
-                (account_id, '{"limits":{"per_transaction":100}}'),
+                "INSERT INTO policies (account_id, name, rules) VALUES (%s,%s,%s::jsonb) RETURNING id",
+                (account_id, f"e2e-policy-{uuid4()}", '{"limits":{"per_transaction":100}}'),
             ).fetchone()[0]
             policy_version = conn.execute(
                 "INSERT INTO policy_versions (policy_id, version, rules) VALUES (%s,1,%s::jsonb) RETURNING id",
                 (policy_id, '{"limits":{"per_transaction":100}}'),
             ).fetchone()[0]
             budget_id = conn.execute(
-                "INSERT INTO budgets (account_id, policy_id, name, currency, limit_amount) VALUES (%s,%s,'e2e-budget',%s,100) RETURNING id",
-                (account_id, policy_id, currency),
+                "INSERT INTO budgets (account_id, policy_id, name, currency, limit_amount) VALUES (%s,%s,%s,%s,100) RETURNING id",
+                (account_id, policy_id, f"e2e-budget-{uuid4()}", currency),
             ).fetchone()[0]
             request_id = conn.execute(
                 """INSERT INTO payment_requests
