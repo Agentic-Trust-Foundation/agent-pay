@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-pay-reference"
-version = "0.2.0"
+version = "0.4.0"
 description = "Reference implementation for the Agent-Pay protocol"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<9", "httpx>=0.27,<1"]
+test = ["pytest>=8,<9", "httpx>=0.27,<1", "PyYAML>=6,<7"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
