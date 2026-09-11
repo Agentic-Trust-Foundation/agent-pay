@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from .auth import require_agent, resolve_approval_bearer, resolve_bearer
 from .control import ControlRepository
 from .db import connection
+from .lifecycle_api import router as lifecycle_router
 from .orchestrator import PaymentOrchestrator
 from .outbox import enqueue
 from .provider import MockProvider
@@ -21,6 +22,7 @@ from .webhooks import router as provider_router
 
 app = FastAPI(title="Agent-Pay Reference", version="0.5.0")
 app.include_router(provider_router)
+app.include_router(lifecycle_router)
 
 
 @app.exception_handler(HTTPException)
