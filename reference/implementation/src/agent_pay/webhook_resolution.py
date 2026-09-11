@@ -10,7 +10,7 @@ from .unit_of_work import UnitOfWork
 class ProviderEventResolver:
     """Apply an already-verified provider event exactly once.
 
-    The provider event is persisted/deduplicated before this resolver is called.
+    Provider events are persisted/deduplicated before this resolver is called.
     Financial mutation happens only for a newly recorded, valid event.
     """
 
@@ -56,44 +56,60 @@ class ProviderEventResolver:
                 return "IGNORED"
 
             if outcome == "SUCCEEDED":
+                self.conn.execute(
+                    """UPDATE provider_operations
+                       SET status='SUCCEEDED', provider_reference=COALESCE(%s, provider_reference),
+                           completed_at=now()
+                     WHERE id=%s""",
+                    (provider_reference, provider_operation_id),
+                )
                 if operation_type == "CHARGE":
                     if not reservation_id:
                         raise ValueError("successful charge has no budget reservation")
-                    self.conn.execute(
-                        "UPDATE provider_operations SET status='SUCCEEDED', provider_reference=%s, completed_at=now() WHERE id=%s",
-                        (provider_reference, provider_operation_id),
-                    )
-                    self.conn.execute(
-                        "UPDATE payments SET status='SUCCEEDED', provider_reference=COALESCE(%s, provider_reference), completed_at=now(), updated_at=now() WHERE id=%s",
-                        (provider_reference, payment_id),
-                    )
                     from .repositories import BudgetRepository
                     BudgetRepository(self.conn).consume(reservation_id)
-                    customer = Decimal(str(amount))
+                    amount_d = Decimal(str(amount))
+                    currency_u = currency.strip().upper()
+                    transaction_id = self._create_transaction(
+                        payment_id=payment_id, type_="CAPTURE", amount=amount_d,
+                        currency=currency_u, idempotency_key=f"payment:{payment_id}:capture:transaction",
+                        external_reference=provider_reference,
+                    )
                     post_journal(
-                        self.conn, currency=currency.strip().upper(), reference_type="PAYMENT",
-                        reference_id=payment_id, idempotency_key=f"payment:{payment_id}:capture:ledger",
+                        self.conn, currency=currency_u, reference_type="PAYMENT",
+                        reference_id=payment_id, idempotency_key=f"payment:{payment_id}:capture",
                         correlation_id=correlation_id,
                         postings=[
-                            {"ledger_account_id": str(customer_ledger_account_id), "side": "CREDIT", "amount": customer, "currency": currency.strip().upper()},
-                            {"ledger_account_id": str(clearing_ledger_account_id), "side": "DEBIT", "amount": customer, "currency": currency.strip().upper()},
+                            {"ledger_account_id": str(customer_ledger_account_id), "side": "DEBIT", "amount": amount_d, "currency": currency_u},
+                            {"ledger_account_id": str(clearing_ledger_account_id), "side": "CREDIT", "amount": amount_d, "currency": currency_u},
                         ],
                     )
-                else:
                     self.conn.execute(
-                        "UPDATE provider_operations SET status='SUCCEEDED', provider_reference=%s, completed_at=now() WHERE id=%s",
-                        (provider_reference, provider_operation_id),
+                        "UPDATE transactions SET status='POSTED', posted_at=now() WHERE id=%s",
+                        (transaction_id,),
                     )
+                self.conn.execute(
+                    """UPDATE payments
+                       SET status='SUCCEEDED', provider_reference=COALESCE(%s, provider_reference),
+                           completed_at=now(), updated_at=now()
+                     WHERE id=%s""",
+                    (provider_reference, payment_id),
+                )
             elif outcome == "FAILED":
                 self.conn.execute(
-                    "UPDATE provider_operations SET status='FAILED', provider_reference=%s, completed_at=now() WHERE id=%s",
+                    """UPDATE provider_operations
+                       SET status='FAILED', provider_reference=COALESCE(%s, provider_reference), completed_at=now()
+                     WHERE id=%s""",
                     (provider_reference, provider_operation_id),
                 )
                 if operation_type == "CHARGE" and reservation_id:
                     from .repositories import BudgetRepository
                     BudgetRepository(self.conn).release(reservation_id)
                 self.conn.execute(
-                    "UPDATE payments SET status='FAILED', provider_reference=COALESCE(%s, provider_reference), completed_at=now(), updated_at=now() WHERE id=%s",
+                    """UPDATE payments
+                       SET status='FAILED', provider_reference=COALESCE(%s, provider_reference),
+                           completed_at=now(), updated_at=now()
+                     WHERE id=%s""",
                     (provider_reference, payment_id),
                 )
             else:
@@ -104,3 +120,21 @@ class ProviderEventResolver:
                 (event_id,),
             )
             return "RESOLVED"
+
+    def _create_transaction(self, *, payment_id: UUID, type_: str, amount: Decimal,
+                            currency: str, idempotency_key: str,
+                            external_reference: str | None = None) -> UUID:
+        existing = self.conn.execute(
+            "SELECT id FROM transactions WHERE idempotency_key=%s",
+            (idempotency_key,),
+        ).fetchone()
+        if existing:
+            return existing[0]
+        return self.conn.execute(
+            """INSERT INTO transactions
+               (payment_id, type, status, amount, currency, external_reference,
+                idempotency_key, posted_at)
+               VALUES (%s,%s,'POSTED',%s,%s,%s,%s,now())
+               RETURNING id""",
+            (payment_id, type_, str(amount), currency, external_reference, idempotency_key),
+        ).fetchone()[0]
