@@ -1,4 +1,5 @@
-"""PostgreSQL repositories used by the reference API."""
+"""PostgreSQL repositories used by the reference API and payment worker."""
+import json
 from uuid import UUID
 
 
@@ -13,7 +14,7 @@ class PaymentRepository:
                (account_id, agent_id, amount, currency, purpose, items, idempotency_key)
                VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
                RETURNING id""",
-            (account_id, agent_id, amount, currency, purpose, __import__('json').dumps(items), idempotency_key),
+            (account_id, agent_id, amount, currency, purpose, json.dumps(items), idempotency_key),
         ).fetchone()
         return row[0]
 
@@ -46,6 +47,29 @@ class PaymentRepository:
             (status, provider_reference, status, payment_id),
         )
 
+    def pending_for_execution(self, limit: int = 25):
+        return self.conn.execute(
+            """SELECT p.id, p.payment_request_id, p.amount, p.currency,
+                      pr.budget_reservation_id, pr.account_id
+               FROM payments p
+               JOIN payment_requests pr ON pr.id = p.payment_request_id
+               WHERE p.status = 'PROCESSING'
+                 AND pr.budget_reservation_id IS NOT NULL
+               ORDER BY p.created_at
+               FOR UPDATE SKIP LOCKED LIMIT %s""",
+            (limit,),
+        ).fetchall()
+
+    def create_provider_operation(self, payment_id: UUID, operation_type: str, idempotency_key: str) -> UUID:
+        row = self.conn.execute(
+            """INSERT INTO provider_operations (payment_id, operation_type, idempotency_key)
+               VALUES (%s, %s, %s)
+               ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
+               RETURNING id""",
+            (payment_id, operation_type, idempotency_key),
+        ).fetchone()
+        return row[0]
+
 
 class BudgetRepository:
     def __init__(self, conn):
@@ -71,12 +95,14 @@ class BudgetRepository:
 
     def consume(self, reservation_id: UUID):
         row = self.conn.execute(
-            "SELECT budget_id, amount FROM budget_reservations WHERE id=%s FOR UPDATE", (reservation_id,)
+            "SELECT budget_id, amount, status FROM budget_reservations WHERE id=%s FOR UPDATE", (reservation_id,)
         ).fetchone()
         if not row:
             raise ValueError("budget reservation not found")
+        if row[2] != "RESERVED":
+            return
         self.conn.execute(
-            "UPDATE budget_reservations SET status='CONSUMED', consumed_at=now() WHERE id=%s AND status='RESERVED'",
+            "UPDATE budget_reservations SET status='CONSUMED', consumed_at=now() WHERE id=%s",
             (reservation_id,),
         )
         self.conn.execute(
@@ -87,12 +113,14 @@ class BudgetRepository:
 
     def release(self, reservation_id: UUID):
         row = self.conn.execute(
-            "SELECT budget_id, amount FROM budget_reservations WHERE id=%s FOR UPDATE", (reservation_id,)
+            "SELECT budget_id, amount, status FROM budget_reservations WHERE id=%s FOR UPDATE", (reservation_id,)
         ).fetchone()
         if not row:
             raise ValueError("budget reservation not found")
+        if row[2] != "RESERVED":
+            return
         self.conn.execute(
-            "UPDATE budget_reservations SET status='RELEASED', released_at=now() WHERE id=%s AND status='RESERVED'",
+            "UPDATE budget_reservations SET status='RELEASED', released_at=now() WHERE id=%s",
             (reservation_id,),
         )
         self.conn.execute("UPDATE budgets SET reserved_amount=reserved_amount-%s, updated_at=now() WHERE id=%s", (row[1], row[0]))
