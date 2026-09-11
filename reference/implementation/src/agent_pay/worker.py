@@ -37,7 +37,12 @@ def process_one(*, conn, payment_id: UUID, provider: PaymentProvider,
         orchestrator.payments.update_status(payment_id, "PROCESSING")
 
     # The provider call happens after the reservation transaction commits.
-    outcome = provider.charge(str(payment_id), int(amount * Decimal("100")), currency)
+    outcome = provider.charge(
+        str(payment_id),
+        int(amount * Decimal("100")),
+        currency,
+        f"payment:{payment_id}:charge",
+    )
 
     with UnitOfWork(conn):
         orchestrator = PaymentOrchestrator(conn, provider)
