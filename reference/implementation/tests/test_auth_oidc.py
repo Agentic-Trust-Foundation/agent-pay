@@ -30,20 +30,24 @@ def test_require_agent_rejects_read_only_principal():
 
 def _configure_oidc(monkeypatch):
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = key.public_key()
     monkeypatch.setenv("AGENT_PAY_AUTH_MODE", "oidc")
     monkeypatch.setenv("AGENT_PAY_OIDC_JWKS_URL", "https://issuer.example/jwks.json")
     monkeypatch.setenv("AGENT_PAY_OIDC_ISSUER", "https://issuer.example/")
     monkeypatch.setenv("AGENT_PAY_OIDC_AUDIENCE", "agent-pay")
 
     class FakeSigningKey:
-        key = key.public_key()
+        pass
+
+    signing_key = FakeSigningKey()
+    signing_key.key = public_key
 
     class FakeJWKClient:
         def __init__(self, url):
             assert url.endswith("/jwks.json")
 
         def get_signing_key_from_jwt(self, token):
-            return FakeSigningKey()
+            return signing_key
 
     monkeypatch.setattr("agent_pay.auth.PyJWKClient", FakeJWKClient)
     return key
@@ -53,16 +57,7 @@ def test_oidc_accepts_valid_short_lived_token_and_claim_binding(monkeypatch):
     key = _configure_oidc(monkeypatch)
     now = int(time.time())
     token = jwt.encode(
-        {
-            "iss": "https://issuer.example/",
-            "aud": "agent-pay",
-            "sub": "user-1",
-            "agent_id": "agent-1",
-            "account_id": "account-1",
-            "scope": "payments:create payments:read",
-            "iat": now,
-            "exp": now + 300,
-        },
+        {"iss": "https://issuer.example/", "aud": "agent-pay", "sub": "user-1", "agent_id": "agent-1", "account_id": "account-1", "scope": "payments:create payments:read", "iat": now, "exp": now + 300},
         key,
         algorithm="RS256",
     )
@@ -77,16 +72,7 @@ def test_oidc_rejects_expired_token(monkeypatch):
     key = _configure_oidc(monkeypatch)
     now = int(time.time())
     token = jwt.encode(
-        {
-            "iss": "https://issuer.example/",
-            "aud": "agent-pay",
-            "sub": "user-1",
-            "agent_id": "agent-1",
-            "account_id": "account-1",
-            "scope": "payments:create",
-            "iat": now - 120,
-            "exp": now - 60,
-        },
+        {"iss": "https://issuer.example/", "aud": "agent-pay", "sub": "user-1", "agent_id": "agent-1", "account_id": "account-1", "scope": "payments:create", "iat": now - 120, "exp": now - 60},
         key,
         algorithm="RS256",
     )
@@ -98,16 +84,7 @@ def test_oidc_rejects_wrong_audience(monkeypatch):
     key = _configure_oidc(monkeypatch)
     now = int(time.time())
     token = jwt.encode(
-        {
-            "iss": "https://issuer.example/",
-            "aud": "another-service",
-            "sub": "user-1",
-            "agent_id": "agent-1",
-            "account_id": "account-1",
-            "scope": "payments:create",
-            "iat": now,
-            "exp": now + 300,
-        },
+        {"iss": "https://issuer.example/", "aud": "another-service", "sub": "user-1", "agent_id": "agent-1", "account_id": "account-1", "scope": "payments:create", "iat": now, "exp": now + 300},
         key,
         algorithm="RS256",
     )
@@ -119,14 +96,7 @@ def test_oidc_rejects_missing_agent_identity_claims(monkeypatch):
     key = _configure_oidc(monkeypatch)
     now = int(time.time())
     token = jwt.encode(
-        {
-            "iss": "https://issuer.example/",
-            "aud": "agent-pay",
-            "sub": "user-1",
-            "scope": "payments:create",
-            "iat": now,
-            "exp": now + 300,
-        },
+        {"iss": "https://issuer.example/", "aud": "agent-pay", "sub": "user-1", "scope": "payments:create", "iat": now, "exp": now + 300},
         key,
         algorithm="RS256",
     )
