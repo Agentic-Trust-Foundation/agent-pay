@@ -5,6 +5,7 @@ purpose: Behavioral conformance vectors for financial-control invariants.
 vectors:
   - id: authority-001
     invariant: agent-never-owns-funds
+    given: agent_requests_payment_from_account_owned_funds
     expect: agent_requests_are_evaluated_against_account_authority
   - id: authority-002
     invariant: identity-is-not-spending-authority
