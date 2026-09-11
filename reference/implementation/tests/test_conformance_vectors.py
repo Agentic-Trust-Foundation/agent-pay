@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 VECTORS = ROOT / "conformance" / "v1" / "payment-control-vectors.yaml"
 
 
