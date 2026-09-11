@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-pay-reference"
-version = "0.4.0"
+version = "0.5.0"
 description = "Reference implementation for the Agent-Pay protocol"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,6 +12,7 @@ dependencies = [
   "uvicorn>=0.30,<1",
   "pydantic>=2.8,<3",
   "psycopg[binary]>=3.2,<4",
+  "PyJWT[crypto]>=2.9,<3",
 ]
 
 [project.optional-dependencies]
