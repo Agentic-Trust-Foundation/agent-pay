@@ -21,7 +21,8 @@ class SimulatedOperation:
     payment_id: str
     amount: Decimal
     currency: str
-    outcome: ProviderOutcome
+    final_outcome: ProviderOutcome
+    caller_outcome: ProviderOutcome
     provider_reference: str
     settled: bool = False
 
@@ -37,27 +38,31 @@ class ProviderSimulator:
         key = f"charge:{payment_id}"
         existing = self.operations.get(key)
         if existing:
-            return existing.outcome
+            # The simulator reproduces the same externally visible result for
+            # retries while retaining a separate final provider outcome.
+            return existing.caller_outcome
+
         self._counter += 1
         reference = f"sim_ch_{self._counter:06d}"
-        # UNKNOWN represents the caller timing out even though the provider
-        # operation has a deterministic final outcome available for webhook delivery.
-        final_outcome = ProviderOutcome.SUCCEEDED if outcome == ProviderOutcome.UNKNOWN else outcome
+        final_outcome = (
+            ProviderOutcome.SUCCEEDED if outcome == ProviderOutcome.UNKNOWN else outcome
+        )
         self.operations[key] = SimulatedOperation(
             operation_id=key,
             payment_id=payment_id,
             amount=Decimal(str(amount)),
-            currency=currency.upper(),
-            outcome=final_outcome,
+            currency=currency.strip().upper(),
+            final_outcome=final_outcome,
+            caller_outcome=outcome,
             provider_reference=reference,
         )
-        return ProviderOutcome.UNKNOWN if outcome == ProviderOutcome.UNKNOWN else outcome
+        return outcome
 
     def webhook(self, payment_id: str) -> tuple[bytes, str]:
         operation = self.operations[f"charge:{payment_id}"]
         payload = {
             "event_id": f"evt_{operation.provider_reference}",
-            "event_type": "payment.succeeded" if operation.outcome == ProviderOutcome.SUCCEEDED else "payment.failed",
+            "event_type": "payment.succeeded" if operation.final_outcome == ProviderOutcome.SUCCEEDED else "payment.failed",
             "payment_id": payment_id,
             "provider_reference": operation.provider_reference,
             "amount": str(operation.amount),
@@ -69,7 +74,7 @@ class ProviderSimulator:
 
     def settlement(self, payment_id: str) -> dict:
         operation = self.operations[f"charge:{payment_id}"]
-        if operation.outcome != ProviderOutcome.SUCCEEDED:
+        if operation.final_outcome != ProviderOutcome.SUCCEEDED:
             raise ValueError("failed provider operation cannot settle")
         operation.settled = True
         return {
