@@ -27,6 +27,8 @@ V1 is a **modular monolith** backed by PostgreSQL, with a transactional outbox a
 ```text
 API
  ↓
+Authenticated Agent Principal
+ ↓
 Agent-Pay Core
  ├── Agent / Delegation / Authorization Context
  ├── Policy / Policy Version
@@ -34,11 +36,13 @@ Agent-Pay Core
  ├── Approval
  ├── Payment / Authentication / Provider Operation
  ├── Payment Router / Instruments
- ├── Transaction / Ledger
+ ├── Transaction / Double-Entry Ledger
  ├── Settlement / Reconciliation
  └── Audit / Notification
  ↓
-PostgreSQL + Outbox
+PostgreSQL + Transactional Outbox
+ ↓
+Provider / Payment Rail Adapters
 ```
 
 Redis may support operational acceleration but never becomes financial source of truth.
@@ -75,7 +79,7 @@ External timeout does not automatically mean failure. Refund, reversal/void, set
 
 ## Stage 3 — Consistency Convergence
 
-The Master Project Schema is now the architecture baseline and Stage 3 aligns the implementation artifacts around it.
+The Master Project Schema is the architecture baseline and Stage 3 aligned the implementation artifacts around it.
 
 Implemented on `main`:
 
@@ -92,11 +96,28 @@ Implemented on `main`:
 - behavioral V1 conformance vectors;
 - V1 payment-intent JSON Schema.
 
-The additive SQL migration is intentionally separate from the original draft schema so the project can migrate safely rather than silently rewriting historical assumptions.
+## Stage 4 — Executable Reference Platform
+
+The reference implementation now contains the first executable platform layers:
+
+- PostgreSQL connection and repository layer;
+- explicit Unit of Work / transaction boundaries;
+- row-locked budget reservations;
+- persistent double-entry journals and postings;
+- provider operation idempotency;
+- fail-closed authentication boundary and agent/account principal binding;
+- external provider adapter boundary;
+- payment execution worker primitive with external calls outside DB transactions;
+- explicit `UNKNOWN_EXTERNAL_OUTCOME` handling;
+- transactional outbox and `FOR UPDATE SKIP LOCKED` claiming;
+- local Docker Compose PostgreSQL bootstrap;
+- PostgreSQL-backed CI validation and integration tests.
+
+The reference stack can therefore exercise the core control path against real PostgreSQL rather than only an in-memory model.
 
 ## Current Status
 
-The repository is still **not a production payment system**. The architecture/specification baseline is substantially converged, while executable reference implementation, real provider adapters, production cryptographic/vault controls, regulatory/compliance work, operational hardening, and full dispute/chargeback capability remain implementation stages.
+The repository is **an executable reference platform, not a production payment processor**. The protocol and architecture baseline are substantially converged. Remaining implementation layers include production OIDC/JWT verification, cryptographic authorization-evidence verification, secure tokenization/vault boundaries, real provider adapters, signed webhook ingestion, settlement/reconciliation workers, complete policy DSL evaluation, approval/notification UX, risk/fraud controls, and regulatory/compliance hardening.
 
 ## Scope
 
@@ -118,42 +139,3 @@ The repository is still **not a production payment system**. The architecture/sp
 - Audit and notifications
 - Agentic commerce context integration
 - Agentic Trust Foundation authorization-evidence integration
-
-### Out of scope
-
-- General agent identity/trust network
-- General delegation protocol
-- Enterprise IAM replacement
-- Complete commerce/catalog/fulfillment protocol
-- Mandatory blockchain/cryptocurrency
-- Mandatory payment provider
-
-## Repository Structure
-
-```text
-agent-pay/
-├── docs/{vision,architecture,protocol,security,governance,integration}/
-├── specs/v1/
-├── reference/implementation/
-├── conformance/
-├── schemas/
-├── examples/
-├── test-vectors/
-└── tools/
-```
-
-## Security Principles
-
-- Agent never owns user funds.
-- No primary financial credentials to agents.
-- Server-side financial authorization and fail-closed decisions.
-- Approval bound to the exact payment intent.
-- Provider credentials isolated behind protected adapters.
-- Financial operations idempotent and concurrency-safe.
-- Provider events authenticated, persisted, deduplicated, and replay-safe.
-- Financial history append-oriented with compensating corrections.
-- Ambiguous external outcomes reconciled rather than guessed.
-
-## License
-
-License and governance terms will be established before the first normative protocol release.
