@@ -37,5 +37,15 @@ services:
       postgres:
         condition: service_healthy
 
+  worker:
+    build: .
+    command: ["python", "-m", "agent_pay.worker_runner"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agent_pay
+      AGENT_PAY_MOCK_OUTCOME: SUCCEEDED
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
