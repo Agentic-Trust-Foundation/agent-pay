@@ -14,6 +14,8 @@ services:
       - ../../specs/v1/migrations/002_ledger_accounts.sql:/docker-entrypoint-initdb.d/30-ledger-accounts.sql:ro
       - ../../specs/v1/migrations/003_execution_integrity.sql:/docker-entrypoint-initdb.d/40-execution-integrity.sql:ro
       - ../../specs/v1/migrations/004_control_binding.sql:/docker-entrypoint-initdb.d/50-control-binding.sql:ro
+      - ../../specs/v1/migrations/005_reconciliation_integrity.sql:/docker-entrypoint-initdb.d/60-reconciliation-integrity.sql:ro
+      - ../../specs/v1/migrations/006_payment_lifecycle.sql:/docker-entrypoint-initdb.d/70-payment-lifecycle.sql:ro
       - ./docker-entrypoint-initdb.d/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agent_pay"]
