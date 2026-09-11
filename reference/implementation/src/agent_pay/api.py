@@ -121,44 +121,43 @@ def create_payment(
                 decision, version_id, _ = control.evaluate_policy(
                     account_id=request.account_id, policy_id=request.policy_id,
                     payment_request_id=request_id, agent_id=request.agent_id, payment_id=payment_id,
-                    amount=Decimal(request.amount.value), currency=currency,
-                    merchant_domain=domain, category=category,
+                    amount=Decimal(request.amount.value), currency=currency, merchant_domain=domain, category=category,
                 )
             except LookupError as exc:
-                deferred_error = (403, str(exc), "POLICY_NOT_CONFIGURED")
+                deferred_error = (403, str(exc))
             else:
+                policy_id = _policy_id(conn, version_id)
                 if decision.value == "DENY":
                     repo.update_status(payment_id, "FAILED")
                     enqueue(conn, event_type="PaymentFailed", aggregate_type="payment", aggregate_id=payment_id,
                             payload={"reason": "POLICY_DENIED", "policy_version_id": str(version_id)}, correlation_id=correlation_id)
-                    deferred_error = (403, "payment denied by policy", "POLICY_DENIED")
-                elif decision.value == "REQUIRE_APPROVAL":
-                    approval_id = control.create_approval(request_id, reason="policy requires approval")
-                    repo.update_status(payment_id, "APPROVAL_REQUIRED")
-                    enqueue(conn, event_type="ApprovalRequested", aggregate_type="payment", aggregate_id=payment_id,
-                            payload={"approval_id": str(approval_id), "policy_version_id": str(version_id)}, correlation_id=correlation_id)
-                    return {"payment_id": str(payment_id), "status": "APPROVAL_REQUIRED", "approval_id": str(approval_id), "correlation_id": correlation_id}
+                    deferred_error = (403, "payment denied by policy")
                 else:
-                    policy_id = _policy_id(conn, version_id)
                     budget_id = control.select_budget(request.account_id, request.budget_id, currency, policy_id)
                     if not budget_id:
                         repo.update_status(payment_id, "FAILED")
                         enqueue(conn, event_type="PaymentFailed", aggregate_type="payment", aggregate_id=payment_id,
                                 payload={"reason": "BUDGET_UNAVAILABLE", "policy_version_id": str(version_id)}, correlation_id=correlation_id)
-                        deferred_error = (409, "exactly one active compatible budget is required", "BUDGET_UNAVAILABLE")
+                        deferred_error = (409, "exactly one active compatible budget is required")
                     else:
+                        control.bind_budget(request_id, budget_id)
+                        if decision.value == "REQUIRE_APPROVAL":
+                            approval_id = control.create_approval(request_id, reason="policy requires approval")
+                            repo.update_status(payment_id, "APPROVAL_REQUIRED")
+                            enqueue(conn, event_type="ApprovalRequested", aggregate_type="payment", aggregate_id=payment_id,
+                                    payload={"approval_id": str(approval_id), "policy_version_id": str(version_id), "budget_id": str(budget_id)},
+                                    correlation_id=correlation_id)
+                            return {"payment_id": str(payment_id), "status": "APPROVAL_REQUIRED", "approval_id": str(approval_id), "correlation_id": correlation_id}
                         orchestrator = PaymentOrchestrator(conn, MockProvider())
                         orchestrator.prepare(payment_id=payment_id, payment_request_id=request_id, budget_id=budget_id,
-                                             amount=Decimal(request.amount.value), currency=currency,
-                                             correlation_id=correlation_id)
+                                             amount=Decimal(request.amount.value), currency=currency, correlation_id=correlation_id)
                         if decision.value == "ALLOW_NOTIFY":
                             enqueue(conn, event_type="NotificationRequested", aggregate_type="payment", aggregate_id=payment_id,
-                                    payload={"type": "PAYMENT_EXECUTION", "amount": request.amount.value, "currency": currency},
-                                    correlation_id=correlation_id)
+                                    payload={"type": "PAYMENT_EXECUTION", "amount": request.amount.value, "currency": currency}, correlation_id=correlation_id)
                         return {"payment_id": str(payment_id), "status": "PROCESSING", "decision": decision.value, "correlation_id": correlation_id}
 
     if deferred_error:
-        status, message, _ = deferred_error
+        status, message = deferred_error
         raise HTTPException(status_code=status, detail=message)
     raise HTTPException(status_code=409, detail="payment could not be prepared")
 
@@ -175,7 +174,6 @@ def approve_payment(
         actor = resolve_approval_bearer(token)
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
-
     with connection() as conn:
         with UnitOfWork(conn):
             control = ControlRepository(conn)
@@ -187,20 +185,17 @@ def approve_payment(
             req = control.payment_request(approval[1])
             if not req:
                 raise HTTPException(status_code=404, detail="payment request not found")
-            policy_id = _policy_id(conn, req[7]) if req[7] else None
-            if not policy_id:
-                raise HTTPException(status_code=409, detail="payment has no valid policy version")
-            budget_id = control.select_budget(req[1], None, req[4].strip().upper(), policy_id)
-            if not budget_id:
-                raise HTTPException(status_code=409, detail="exactly one active compatible budget is required")
+            if req[11] != "APPROVAL_REQUIRED":
+                raise HTTPException(status_code=409, detail="payment is not awaiting approval")
+            if not req[8]:
+                raise HTTPException(status_code=409, detail="payment has no bound budget")
             control.set_approval(approval_id, "APPROVED", actor, decision.reason if decision else None)
             orchestrator = PaymentOrchestrator(conn, MockProvider())
-            orchestrator.prepare(payment_id=req[9], payment_request_id=req[0], budget_id=budget_id,
-                                 amount=Decimal(str(req[3])), currency=req[4].strip().upper(),
-                                 correlation_id=correlation_id)
-            enqueue(conn, event_type="PaymentApproved", aggregate_type="payment", aggregate_id=req[9],
+            orchestrator.prepare(payment_id=req[10], payment_request_id=req[0], budget_id=req[8],
+                                 amount=Decimal(str(req[3])), currency=req[4].strip().upper(), correlation_id=correlation_id)
+            enqueue(conn, event_type="PaymentApproved", aggregate_type="payment", aggregate_id=req[10],
                     payload={"approval_id": str(approval_id), "approved_by": actor}, correlation_id=correlation_id)
-            return {"payment_id": str(req[9]), "approval_id": str(approval_id), "status": "PROCESSING", "correlation_id": correlation_id}
+            return {"payment_id": str(req[10]), "approval_id": str(approval_id), "status": "PROCESSING", "correlation_id": correlation_id}
 
 
 @app.post("/v1/approvals/{approval_id}/deny", status_code=202)
@@ -225,10 +220,10 @@ def deny_payment(
                 raise HTTPException(status_code=409, detail="approval is no longer pending")
             req = control.payment_request(approval[1])
             control.set_approval(approval_id, "DENIED", actor, decision.reason if decision else None)
-            PaymentRepository(conn).update_status(req[9], "FAILED")
-            enqueue(conn, event_type="PaymentFailed", aggregate_type="payment", aggregate_id=req[9],
+            PaymentRepository(conn).update_status(req[10], "FAILED")
+            enqueue(conn, event_type="PaymentFailed", aggregate_type="payment", aggregate_id=req[10],
                     payload={"reason": "USER_DENIED", "approval_id": str(approval_id)}, correlation_id=correlation_id)
-            return {"payment_id": str(req[9]), "approval_id": str(approval_id), "status": "FAILED", "correlation_id": correlation_id}
+            return {"payment_id": str(req[10]), "approval_id": str(approval_id), "status": "FAILED", "correlation_id": correlation_id}
 
 
 @app.get("/v1/payments/{payment_id}")
