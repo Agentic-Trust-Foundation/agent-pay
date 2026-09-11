@@ -1,0 +1,145 @@
+import os
+from decimal import Decimal
+from uuid import uuid4
+
+import pytest
+
+from agent_pay.db import connection
+from agent_pay.provider_events import ProviderEventRepository
+from agent_pay.settlement import SettlementRepository
+from agent_pay.simulator import ProviderSimulator
+from agent_pay.webhook_resolution import ProviderEventResolver
+
+
+pytestmark = pytest.mark.integration
+
+
+def test_postgres_timeout_webhook_settlement_e2e():
+    if not os.getenv("DATABASE_URL"):
+        pytest.skip("DATABASE_URL is required for PostgreSQL integration tests")
+
+    provider = ProviderSimulator()
+    amount = Decimal("25.00")
+    currency = "USD"
+
+    with connection() as conn:
+        with conn.transaction():
+            account_id = conn.execute(
+                "INSERT INTO accounts (owner_reference) VALUES (%s) RETURNING id", (f"e2e-{uuid4()}",)
+            ).fetchone()[0]
+            agent_id = conn.execute(
+                "INSERT INTO agents (account_id, name) VALUES (%s,%s) RETURNING id",
+                (account_id, "e2e-agent"),
+            ).fetchone()[0]
+            wallet_id = conn.execute(
+                "INSERT INTO wallets (account_id, currency, balance, available_balance) VALUES (%s,%s,100,100) RETURNING id",
+                (account_id, currency),
+            ).fetchone()[0]
+            customer_ledger = conn.execute(
+                "INSERT INTO ledger_accounts (wallet_id, currency, account_type, name) VALUES (%s,%s,'CUSTOMER','e2e-customer') RETURNING id",
+                (wallet_id, currency),
+            ).fetchone()[0]
+            clearing_ledger = conn.execute(
+                "INSERT INTO ledger_accounts (currency, account_type, name) VALUES (%s,'CLEARING','e2e-clearing') RETURNING id",
+                (currency, "e2e-clearing"),
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT INTO payment_provider_accounts (provider_name, currency, ledger_account_id) VALUES ('mock',%s,%s)",
+                (currency, clearing_ledger),
+            )
+            policy_id = conn.execute(
+                "INSERT INTO policies (account_id, name, rules) VALUES (%s,'e2e-policy',%s::jsonb) RETURNING id",
+                (account_id, '{"limits":{"per_transaction":100}}'),
+            ).fetchone()[0]
+            policy_version = conn.execute(
+                "INSERT INTO policy_versions (policy_id, version, rules) VALUES (%s,1,%s::jsonb) RETURNING id",
+                (policy_id, '{"limits":{"per_transaction":100}}'),
+            ).fetchone()[0]
+            budget_id = conn.execute(
+                "INSERT INTO budgets (account_id, policy_id, name, currency, limit_amount) VALUES (%s,%s,'e2e-budget',%s,100) RETURNING id",
+                (account_id, policy_id, currency),
+            ).fetchone()[0]
+            request_id = conn.execute(
+                """INSERT INTO payment_requests
+                   (account_id, agent_id, amount, currency, purpose, idempotency_key, policy_version_id, budget_id)
+                   VALUES (%s,%s,%s,%s,'e2e purchase',%s,%s,%s) RETURNING id""",
+                (account_id, agent_id, amount, currency, f"e2e:{uuid4()}", policy_version, budget_id),
+            ).fetchone()[0]
+            payment_id = conn.execute(
+                "INSERT INTO payments (payment_request_id, amount, currency, status) VALUES (%s,%s,%s,'UNKNOWN_EXTERNAL_OUTCOME') RETURNING id",
+                (request_id, amount, currency),
+            ).fetchone()[0]
+            reservation_id = conn.execute(
+                """INSERT INTO budget_reservations (budget_id, payment_request_id, amount, currency)
+                   VALUES (%s,%s,%s,%s) RETURNING id""",
+                (budget_id, request_id, amount, currency),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE budgets SET reserved_amount=%s WHERE id=%s", (amount, budget_id)
+            )
+            conn.execute(
+                "UPDATE payment_requests SET budget_reservation_id=%s WHERE id=%s", (reservation_id, request_id)
+            )
+            operation_id = conn.execute(
+                """INSERT INTO provider_operations (payment_id, operation_type, idempotency_key, status)
+                   VALUES (%s,'CHARGE',%s,'PENDING') RETURNING id""",
+                (payment_id, f"payment:{payment_id}:charge"),
+            ).fetchone()[0]
+
+        observed = provider.charge(str(payment_id), amount, currency, outcome=provider.UNKNOWN if False else None)
+        assert observed is not None
+        body, _ = provider.webhook(str(payment_id))
+        import json
+        payload = json.loads(body)
+
+        with conn.transaction():
+            event_id = ProviderEventRepository(conn).record(
+                provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"],
+                payload=payload, signature_valid=True,
+            )
+            conn.execute(
+                "UPDATE provider_events SET provider_operation_id=%s WHERE id=%s", (operation_id, event_id)
+            )
+            result = ProviderEventResolver(conn).resolve(
+                event_id=event_id,
+                provider_operation_id=operation_id,
+                outcome="SUCCEEDED",
+                provider_reference=payload["provider_reference"],
+                customer_ledger_account_id=customer_ledger,
+                clearing_ledger_account_id=clearing_ledger,
+                correlation_id="e2e",
+            )
+            assert result == "RESOLVED"
+
+            payment = conn.execute("SELECT status, provider_reference FROM payments WHERE id=%s", (payment_id,)).fetchone()
+            assert payment == ("SUCCEEDED", payload["provider_reference"])
+            reservation = conn.execute("SELECT status FROM budget_reservations WHERE id=%s", (reservation_id,)).fetchone()
+            assert reservation[0] == "CONSUMED"
+            totals = conn.execute(
+                "SELECT side, sum(amount) FROM ledger_postings lp JOIN ledger_journals lj ON lj.id=lp.journal_id WHERE lj.reference_id=%s GROUP BY side ORDER BY side",
+                (payment_id,),
+            ).fetchall()
+            assert totals == [("CREDIT", Decimal("25.0000")), ("DEBIT", Decimal("25.0000"))]
+
+            duplicate = ProviderEventRepository(conn).record(
+                provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"],
+                payload=payload, signature_valid=True,
+            )
+            assert duplicate is None
+
+        settlement = provider.settlement(str(payment_id))
+        with conn.transaction():
+            assert SettlementRepository(conn).ingest(
+                provider_name="mock",
+                settlement_reference=settlement["settlement_reference"],
+                provider_reference=settlement["provider_reference"],
+                observed_amount=settlement["amount"],
+                observed_currency=settlement["currency"],
+            ) == "MATCHED"
+            assert SettlementRepository(conn).ingest(
+                provider_name="mock",
+                settlement_reference=settlement["settlement_reference"],
+                provider_reference=settlement["provider_reference"],
+                observed_amount=settlement["amount"],
+                observed_currency=settlement["currency"],
+            ) == "DUPLICATE"
