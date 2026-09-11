@@ -12,6 +12,7 @@ services:
       - ../../specs/v1/database-schema.sql:/docker-entrypoint-initdb.d/10-base-schema.sql:ro
       - ../../specs/v1/migrations/001_stage4_convergence.sql:/docker-entrypoint-initdb.d/20-stage4-convergence.sql:ro
       - ../../specs/v1/migrations/002_ledger_accounts.sql:/docker-entrypoint-initdb.d/30-ledger-accounts.sql:ro
+      - ../../specs/v1/migrations/003_execution_integrity.sql:/docker-entrypoint-initdb.d/40-execution-integrity.sql:ro
       - ./docker-entrypoint-initdb.d/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agent_pay"]
