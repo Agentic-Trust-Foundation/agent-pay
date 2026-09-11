@@ -7,7 +7,7 @@ servers:
   - url: https://api.example.invalid/v1
 security:
   - agentBearer: []
-tags: [{name: Agents}, {name: Delegations}, {name: Wallets}, {name: Policies}, {name: Payments}, {name: Approvals}, {name: Transactions}]
+tags: [{name: Agents}, {name: Delegations}, {name: Wallets}, {name: Policies}, {name: Payments}, {name: Approvals}, {name: Transactions}, {name: Providers}]
 paths:
   /agents:
     post:
@@ -67,7 +67,7 @@ paths:
         required: true
         content: {application/json: {schema: {$ref: '#/components/schemas/CreatePaymentRequest'}}}
       responses:
-        '201': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Payment'}}}}
+        '202': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Payment'}}}}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
@@ -88,6 +88,45 @@ paths:
       responses:
         '200': {description: Cancelled, content: {application/json: {schema: {$ref: '#/components/schemas/Payment'}}}}
         '409': {$ref: '#/components/responses/Conflict'}
+  /payments/{paymentId}/capture:
+    post:
+      tags: [Payments]
+      operationId: capturePayment
+      parameters: [{$ref: '#/components/parameters/PaymentId'}, {$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CorrelationId'}]
+      requestBody:
+        required: false
+        content: {application/json: {schema: {$ref: '#/components/schemas/LifecycleRequest'}}}
+      responses:
+        '202': {description: Capture accepted, content: {application/json: {schema: {$ref: '#/components/schemas/LifecycleResponse'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /payments/{paymentId}/void:
+    post:
+      tags: [Payments]
+      operationId: voidPayment
+      parameters: [{$ref: '#/components/parameters/PaymentId'}, {$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CorrelationId'}]
+      requestBody:
+        required: false
+        content: {application/json: {schema: {$ref: '#/components/schemas/LifecycleRequest'}}}
+      responses:
+        '202': {description: Void accepted, content: {application/json: {schema: {$ref: '#/components/schemas/LifecycleResponse'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /payments/{paymentId}/refund:
+    post:
+      tags: [Payments]
+      operationId: refundPayment
+      parameters: [{$ref: '#/components/parameters/PaymentId'}, {$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CorrelationId'}]
+      requestBody:
+        required: false
+        content: {application/json: {schema: {$ref: '#/components/schemas/LifecycleRequest'}}}
+      responses:
+        '202': {description: Refund accepted, content: {application/json: {schema: {$ref: '#/components/schemas/LifecycleResponse'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
   /approvals/{approvalId}/approve:
     post:
       tags: [Approvals]
@@ -96,7 +135,8 @@ paths:
       requestBody:
         content: {application/json: {schema: {$ref: '#/components/schemas/ApprovalDecisionRequest'}}}
       responses:
-        '200': {description: Approved, content: {application/json: {schema: {$ref: '#/components/schemas/Approval'}}}}
+        '202': {description: Approved, content: {application/json: {schema: {$ref: '#/components/schemas/Approval'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/Conflict'}
   /approvals/{approvalId}/deny:
     post:
@@ -106,7 +146,8 @@ paths:
       requestBody:
         content: {application/json: {schema: {$ref: '#/components/schemas/ApprovalDecisionRequest'}}}
       responses:
-        '200': {description: Denied, content: {application/json: {schema: {$ref: '#/components/schemas/Approval'}}}}
+        '202': {description: Denied, content: {application/json: {schema: {$ref: '#/components/schemas/Approval'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/Conflict'}
   /transactions/{transactionId}:
     get:
@@ -116,6 +157,40 @@ paths:
       responses:
         '200': {description: Transaction, content: {application/json: {schema: {$ref: '#/components/schemas/Transaction'}}}}
         '404': {$ref: '#/components/responses/NotFound'}
+  /providers/{providerName}/webhooks:
+    post:
+      tags: [Providers]
+      operationId: ingestProviderWebhook
+      security: []
+      parameters:
+        - {$ref: '#/components/parameters/ProviderName'}
+        - {$ref: '#/components/parameters/ProviderSignature'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ProviderWebhookEvent'}}}
+      responses:
+        '200': {description: Event processed, content: {application/json: {schema: {$ref: '#/components/schemas/ProviderEventResult'}}}}
+        '202': {description: Event accepted for later handling, content: {application/json: {schema: {$ref: '#/components/schemas/ProviderEventResult'}}}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /providers/{providerName}/settlements:
+    post:
+      tags: [Providers]
+      operationId: ingestProviderSettlement
+      security: []
+      parameters:
+        - {$ref: '#/components/parameters/ProviderName'}
+        - {$ref: '#/components/parameters/ProviderSignature'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/SettlementReport'}}}
+      responses:
+        '200': {description: Reconciliation result, content: {application/json: {schema: {$ref: '#/components/schemas/SettlementResult'}}}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
 components:
   securitySchemes:
     agentBearer:
@@ -128,6 +203,8 @@ components:
     PaymentId: {name: paymentId, in: path, required: true, schema: {type: string}}
     ApprovalId: {name: approvalId, in: path, required: true, schema: {type: string}}
     TransactionId: {name: transactionId, in: path, required: true, schema: {type: string}}
+    ProviderName: {name: providerName, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9._-]+$'}}
+    ProviderSignature: {name: X-Provider-Signature, in: header, required: true, schema: {type: string}}
     IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 8, maxLength: 255}}
     CorrelationId: {name: X-Correlation-Id, in: header, required: false, schema: {type: string, maxLength: 255}}
   responses:
@@ -245,7 +322,7 @@ components:
         unit_price: {$ref: '#/components/schemas/Money'}
     CreatePaymentRequest:
       type: object
-      required: [agent_id, account_id, merchant, amount, purpose]
+      required: [agent_id, account_id, amount, purpose]
       properties:
         agent_id: {type: string}
         account_id: {type: string}
@@ -256,6 +333,8 @@ components:
         commerce_context: {$ref: '#/components/schemas/CommerceContext'}
         authorization_evidence: {$ref: '#/components/schemas/AuthorizationEvidence'}
         preferred_instrument_id: {type: string}
+        policy_id: {type: string}
+        budget_id: {type: string}
     Payment:
       type: object
       required: [id, status, amount, currency, agent_id, account_id]
@@ -308,17 +387,64 @@ components:
         decided_by: {type: string}
         intent_digest: {type: string}
         reason: {type: string}
+    LifecycleRequest:
+      type: object
+      properties:
+        amount: {type: string, pattern: '^[0-9]+(\\.[0-9]{1,4})?$'}
+        reason: {type: string, maxLength: 500}
+    LifecycleResponse:
+      type: object
+      required: [payment_id, status]
+      properties:
+        payment_id: {type: string}
+        status: {type: string}
+        transaction_id: {type: string, nullable: true}
+        correlation_id: {type: string, nullable: true}
     Transaction:
       type: object
       required: [id, type, status, amount, currency]
       properties:
         id: {type: string}
         payment_id: {type: string, nullable: true}
-        type: {type: string, enum: [FUNDING, PAYMENT, HOLD, RELEASE, REFUND, REVERSAL, ADJUSTMENT, FEE]}
+        type: {type: string, enum: [FUNDING, PAYMENT, CAPTURE, VOID, HOLD, RELEASE, REFUND, REVERSAL, ADJUSTMENT, FEE]}
         status: {type: string, enum: [PENDING, POSTED, FAILED, REVERSED]}
         amount: {type: string}
         currency: {type: string}
         created_at: {type: string, format: date-time}
+    ProviderWebhookEvent:
+      type: object
+      required: [event_id, event_type, provider_reference]
+      properties:
+        event_id: {type: string}
+        event_type: {type: string}
+        payment_id: {type: string}
+        provider_reference: {type: string}
+        amount: {type: string}
+        currency: {type: string}
+        occurred_at: {type: string, format: date-time}
+    ProviderEventResult:
+      type: object
+      required: [status, event_id]
+      properties:
+        status: {type: string, enum: [SUCCEEDED, FAILED, DUPLICATE, ACCEPTED]}
+        event_id: {type: string}
+        payment_id: {type: string, nullable: true}
+    SettlementReport:
+      type: object
+      required: [settlement_reference, provider_reference, amount, currency]
+      properties:
+        settlement_reference: {type: string}
+        provider_reference: {type: string}
+        amount: {type: string}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        reported_at: {type: string, format: date-time}
+        settled_at: {type: string, format: date-time}
+    SettlementResult:
+      type: object
+      required: [status, settlement_reference]
+      properties:
+        status: {type: string, enum: [MATCHED, DISCREPANCY, DUPLICATE]}
+        settlement_reference: {type: string}
     ProblemDetails:
       type: object
       required: [type, title, status]
