@@ -8,24 +8,34 @@ class PaymentRepository:
     def __init__(self, conn):
         self.conn = conn
 
+    def merchant(self, *, name: str, domain: str | None):
+        if not domain:
+            return None
+        row = self.conn.execute("SELECT id FROM merchants WHERE domain=%s LIMIT 1", (domain,)).fetchone()
+        if row:
+            return row[0]
+        return self.conn.execute(
+            "INSERT INTO merchants (name, domain) VALUES (%s,%s) RETURNING id",
+            (name, domain),
+        ).fetchone()[0]
+
     def create_request(self, *, account_id: UUID, agent_id: UUID, amount: str,
                        currency: str, purpose: str, items: list, idempotency_key: str,
-                       request_fingerprint: str | None = None) -> UUID:
+                       request_fingerprint: str | None = None, merchant_id: UUID | None = None) -> UUID:
         row = self.conn.execute(
             """INSERT INTO payment_requests
-               (account_id, agent_id, amount, currency, purpose, items, idempotency_key, request_fingerprint)
-               VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s)
-               RETURNING id""",
-            (account_id, agent_id, amount, currency, purpose, json.dumps(items), idempotency_key,
-             request_fingerprint),
+               (account_id, agent_id, merchant_id, amount, currency, purpose, items,
+                idempotency_key, request_fingerprint)
+               VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s) RETURNING id""",
+            (account_id, agent_id, merchant_id, amount, currency, purpose,
+             json.dumps(items), idempotency_key, request_fingerprint),
         ).fetchone()
         return row[0]
 
     def find_by_idempotency(self, account_id: UUID, key: str):
         return self.conn.execute(
             """SELECT id, amount, currency, purpose, items, request_fingerprint
-               FROM payment_requests
-               WHERE account_id=%s AND idempotency_key=%s""",
+               FROM payment_requests WHERE account_id=%s AND idempotency_key=%s""",
             (account_id, key),
         ).fetchone()
 
@@ -39,8 +49,7 @@ class PaymentRepository:
 
     def create_payment(self, *, request_id: UUID, amount: str, currency: str, status: str):
         return self.conn.execute(
-            """INSERT INTO payments (payment_request_id, amount, currency, status)
-               VALUES (%s, %s, %s, %s) RETURNING id""",
+            "INSERT INTO payments (payment_request_id, amount, currency, status) VALUES (%s,%s,%s,%s) RETURNING id",
             (request_id, amount, currency, status),
         ).fetchone()[0]
 
@@ -56,19 +65,16 @@ class PaymentRepository:
         return self.conn.execute(
             """SELECT p.id, p.payment_request_id, p.amount, p.currency,
                       pr.budget_reservation_id, pr.account_id
-               FROM payments p
-               JOIN payment_requests pr ON pr.id = p.payment_request_id
-               WHERE p.status = 'PROCESSING'
-                 AND pr.budget_reservation_id IS NOT NULL
-               ORDER BY p.created_at
-               FOR UPDATE SKIP LOCKED LIMIT %s""",
+               FROM payments p JOIN payment_requests pr ON pr.id=p.payment_request_id
+               WHERE p.status='PROCESSING' AND pr.budget_reservation_id IS NOT NULL
+               ORDER BY p.created_at FOR UPDATE SKIP LOCKED LIMIT %s""",
             (limit,),
         ).fetchall()
 
     def create_provider_operation(self, payment_id: UUID, operation_type: str, idempotency_key: str) -> UUID:
         row = self.conn.execute(
             """INSERT INTO provider_operations (payment_id, operation_type, idempotency_key)
-               VALUES (%s, %s, %s)
+               VALUES (%s,%s,%s)
                ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
                RETURNING id""",
             (payment_id, operation_type, idempotency_key),
@@ -88,36 +94,33 @@ class BudgetRepository:
         if not row:
             return None
         requested = Decimal(str(amount))
+        if row[4].strip().upper() != self._request_currency(payment_request_id):
+            return None
         available = Decimal(row[1]) - Decimal(row[2]) - Decimal(row[3])
         if available < requested:
             return None
         reservation = self.conn.execute(
-            """INSERT INTO budget_reservations (budget_id, payment_request_id, amount, currency)
-               VALUES (%s,%s,%s,%s) RETURNING id""",
+            "INSERT INTO budget_reservations (budget_id,payment_request_id,amount,currency) VALUES (%s,%s,%s,%s) RETURNING id",
             (budget_id, payment_request_id, str(requested), row[4]),
         ).fetchone()[0]
         self.conn.execute("UPDATE budgets SET reserved_amount=reserved_amount+%s, updated_at=now() WHERE id=%s", (requested, budget_id))
         return reservation
 
+    def _request_currency(self, payment_request_id: UUID) -> str:
+        row = self.conn.execute("SELECT currency FROM payment_requests WHERE id=%s", (payment_request_id,)).fetchone()
+        return row[0].strip().upper() if row else ""
+
     def consume(self, reservation_id: UUID):
-        row = self.conn.execute(
-            "SELECT budget_id, amount, status FROM budget_reservations WHERE id=%s FOR UPDATE", (reservation_id,)
-        ).fetchone()
+        row = self.conn.execute("SELECT budget_id, amount, status FROM budget_reservations WHERE id=%s FOR UPDATE", (reservation_id,)).fetchone()
         if not row:
             raise ValueError("budget reservation not found")
         if row[2] != "RESERVED":
             return
         self.conn.execute("UPDATE budget_reservations SET status='CONSUMED', consumed_at=now() WHERE id=%s", (reservation_id,))
-        self.conn.execute(
-            """UPDATE budgets SET reserved_amount=reserved_amount-%s,
-                      consumed_amount=consumed_amount+%s, updated_at=now() WHERE id=%s""",
-            (row[1], row[1], row[0]),
-        )
+        self.conn.execute("UPDATE budgets SET reserved_amount=reserved_amount-%s, consumed_amount=consumed_amount+%s, updated_at=now() WHERE id=%s", (row[1], row[1], row[0]))
 
     def release(self, reservation_id: UUID):
-        row = self.conn.execute(
-            "SELECT budget_id, amount, status FROM budget_reservations WHERE id=%s FOR UPDATE", (reservation_id,)
-        ).fetchone()
+        row = self.conn.execute("SELECT budget_id, amount, status FROM budget_reservations WHERE id=%s FOR UPDATE", (reservation_id,)).fetchone()
         if not row:
             raise ValueError("budget reservation not found")
         if row[2] != "RESERVED":
