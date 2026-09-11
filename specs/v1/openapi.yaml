@@ -1,0 +1,590 @@
+openapi: 3.0.3
+info:
+  title: Agent-Pay API
+  version: 1.0.0
+  description: |
+    Financial control and payment API for AI agents. Agent-Pay evaluates
+    delegated authority, spending policy, budget, approval, and payment
+    routing before executing financial intent.
+servers:
+  - url: https://api.example.invalid/v1
+    description: Placeholder for the future Agent-Pay deployment
+
+tags:
+  - name: Agents
+  - name: Delegations
+  - name: Wallets
+  - name: Policies
+  - name: Payments
+  - name: Approvals
+  - name: Transactions
+
+paths:
+  /agents:
+    post:
+      tags: [Agents]
+      summary: Register an agent
+      operationId: createAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+
+  /delegations:
+    post:
+      tags: [Delegations]
+      summary: Create a spending delegation
+      operationId: createDelegation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDelegationRequest'
+      responses:
+        '201':
+          description: Delegation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delegation'
+
+  /wallets:
+    post:
+      tags: [Wallets]
+      summary: Create a wallet
+      operationId: createWallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWalletRequest'
+      responses:
+        '201':
+          description: Wallet created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wallet'
+
+  /wallets/{walletId}/fund:
+    post:
+      tags: [Wallets]
+      summary: Fund a wallet
+      operationId: fundWallet
+      parameters:
+        - $ref: '#/components/parameters/WalletId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyRequest'
+      responses:
+        '201':
+          description: Funding transaction created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /policies:
+    post:
+      tags: [Policies]
+      summary: Create a spending policy
+      operationId: createPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePolicyRequest'
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+
+  /payments:
+    post:
+      tags: [Payments]
+      summary: Submit a payment intent
+      description: |
+        Creates a payment request. The server authenticates the caller,
+        validates delegation, evaluates policy and budget, and determines
+        whether automatic execution, notification, or explicit approval is
+        required.
+      operationId: createPayment
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Payment request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /payments/{paymentId}:
+    get:
+      tags: [Payments]
+      summary: Get payment status
+      operationId: getPayment
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Payment status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /approvals/{approvalId}/approve:
+    post:
+      tags: [Approvals]
+      summary: Approve a payment request
+      operationId: approvePayment
+      parameters:
+        - $ref: '#/components/parameters/ApprovalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecisionRequest'
+      responses:
+        '200':
+          description: Payment approval recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /approvals/{approvalId}/deny:
+    post:
+      tags: [Approvals]
+      summary: Deny a payment request
+      operationId: denyPayment
+      parameters:
+        - $ref: '#/components/parameters/ApprovalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecisionRequest'
+      responses:
+        '200':
+          description: Payment denial recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /transactions/{transactionId}:
+    get:
+      tags: [Transactions]
+      summary: Get transaction details
+      operationId: getTransaction
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Transaction details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    WalletId:
+      name: walletId
+      in: path
+      required: true
+      schema:
+        type: string
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: string
+    ApprovalId:
+      name: approvalId
+      in: path
+      required: true
+      schema:
+        type: string
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key for safely retrying a financial operation.
+      schema:
+        type: string
+        minLength: 8
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Request is not financially authorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: State conflict or duplicate operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Money:
+      type: object
+      required: [value, currency]
+      properties:
+        value:
+          type: string
+          pattern: '^[0-9]+(\\.[0-9]{1,4})?$'
+          example: '850.00'
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: USD
+
+    MoneyRequest:
+      allOf:
+        - $ref: '#/components/schemas/Money'
+
+    CreateAgentRequest:
+      type: object
+      required: [account_id, name]
+      properties:
+        account_id:
+          type: string
+        name:
+          type: string
+        identity_reference:
+          type: string
+          description: External identity/trust reference, potentially supplied by ATF.
+
+    Agent:
+      allOf:
+        - $ref: '#/components/schemas/CreateAgentRequest'
+        - type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+              enum: [ACTIVE, SUSPENDED, REVOKED]
+
+    CreateDelegationRequest:
+      type: object
+      required: [account_id, agent_id]
+      properties:
+        account_id:
+          type: string
+        agent_id:
+          type: string
+        scope:
+          type: array
+          items:
+            type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+
+    Delegation:
+      allOf:
+        - $ref: '#/components/schemas/CreateDelegationRequest'
+        - type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+              enum: [ACTIVE, SUSPENDED, REVOKED, EXPIRED]
+
+    CreateWalletRequest:
+      type: object
+      required: [account_id, currency]
+      properties:
+        account_id:
+          type: string
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+
+    Wallet:
+      allOf:
+        - $ref: '#/components/schemas/CreateWalletRequest'
+        - type: object
+          required: [id, balance, available_balance, status]
+          properties:
+            id:
+              type: string
+            balance:
+              $ref: '#/components/schemas/Money'
+            available_balance:
+              $ref: '#/components/schemas/Money'
+            status:
+              type: string
+              enum: [ACTIVE, SUSPENDED, CLOSED]
+
+    CreatePolicyRequest:
+      type: object
+      required: [account_id, name]
+      properties:
+        account_id:
+          type: string
+        name:
+          type: string
+        per_transaction_limit:
+          $ref: '#/components/schemas/Money'
+        daily_limit:
+          $ref: '#/components/schemas/Money'
+        monthly_limit:
+          $ref: '#/components/schemas/Money'
+        allowed_categories:
+          type: array
+          items:
+            type: string
+        denied_categories:
+          type: array
+          items:
+            type: string
+
+    Policy:
+      allOf:
+        - $ref: '#/components/schemas/CreatePolicyRequest'
+        - type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+              enum: [ACTIVE, INACTIVE]
+
+    Merchant:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        domain:
+          type: string
+        category:
+          type: string
+        country:
+          type: string
+
+    PaymentItem:
+      type: object
+      required: [name, quantity, unit_price]
+      properties:
+        name:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unit_price:
+          $ref: '#/components/schemas/Money'
+
+    CreatePaymentRequest:
+      type: object
+      required: [agent_id, account_id, merchant, amount, purpose]
+      properties:
+        agent_id:
+          type: string
+        account_id:
+          type: string
+        merchant:
+          $ref: '#/components/schemas/Merchant'
+        amount:
+          $ref: '#/components/schemas/Money'
+        purpose:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        preferred_instrument_id:
+          type: string
+
+    Payment:
+      type: object
+      required: [id, status, amount, currency, agent_id, account_id]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - REQUESTED
+            - VALIDATING
+            - POLICY_CHECK
+            - APPROVAL_REQUIRED
+            - APPROVED
+            - PAYMENT_PENDING
+            - PROCESSING
+            - SUCCEEDED
+            - FAILED
+            - CANCELLED
+            - REFUND_REQUESTED
+            - REFUNDED
+        agent_id:
+          type: string
+        account_id:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        approval_id:
+          type: string
+          nullable: true
+        provider_reference:
+          type: string
+          nullable: true
+
+    ApprovalDecisionRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    Approval:
+      type: object
+      required: [id, payment_id, status]
+      properties:
+        id:
+          type: string
+        payment_id:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, APPROVED, DENIED, EXPIRED, CANCELLED]
+        requested_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_by:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+
+    Transaction:
+      type: object
+      required: [id, type, status, amount, currency]
+      properties:
+        id:
+          type: string
+        payment_id:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [CREDIT, DEBIT, HOLD, RELEASE, REFUND, ADJUSTMENT]
+        status:
+          type: string
+          enum: [PENDING, POSTED, FAILED, REVERSED]
+        amount:
+          type: string
+        currency:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        correlation_id:
+          type: string
