@@ -45,12 +45,44 @@ def enqueue(conn, *, event_type: str, aggregate_type: str, aggregate_id: UUID,
 
 
 def claim_batch(conn, limit: int = 50):
+    """Claim pending events for one publisher using row locks.
+
+    The claim is intentionally short-lived. Publication happens outside the
+    database transaction; callers must call mark_published or mark_failed.
+    """
     return conn.execute(
-        """SELECT id, event_type, aggregate_type, aggregate_id, payload
-           FROM outbox_events
-           WHERE status = 'PENDING' AND available_at <= now()
-           ORDER BY created_at
-           FOR UPDATE SKIP LOCKED
-           LIMIT %s""",
+        """UPDATE outbox_events
+           SET status='PROCESSING', attempts=attempts+1
+           WHERE id IN (
+               SELECT id FROM outbox_events
+               WHERE status='PENDING' AND available_at <= now()
+               ORDER BY created_at
+               FOR UPDATE SKIP LOCKED
+               LIMIT %s
+           )
+           RETURNING id, event_type, aggregate_type, aggregate_id, payload,
+                     correlation_id, attempts""",
         (limit,),
     ).fetchall()
+
+
+def mark_published(conn, event_id: UUID) -> None:
+    conn.execute(
+        """UPDATE outbox_events
+           SET status='PUBLISHED', published_at=now()
+           WHERE id=%s AND status='PROCESSING'""",
+        (event_id,),
+    )
+
+
+def mark_failed(conn, event_id: UUID, *, retry_after_seconds: int = 30) -> None:
+    """Return a failed publication to PENDING with deterministic backoff."""
+    if retry_after_seconds < 0:
+        raise ValueError("retry_after_seconds must be non-negative")
+    conn.execute(
+        """UPDATE outbox_events
+           SET status='PENDING',
+               available_at=now() + (%s * interval '1 second')
+           WHERE id=%s AND status='PROCESSING'""",
+        (retry_after_seconds, event_id),
+    )
