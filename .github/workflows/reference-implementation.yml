@@ -1,0 +1,22 @@
+name: Agent-Pay Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  reference-implementation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference/implementation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install implementation
+        run: pip install -e '.[test]'
+      - name: Run reference tests
+        run: pytest -q
