@@ -15,8 +15,10 @@ from .outbox import enqueue
 from .provider import MockProvider
 from .repositories import PaymentRepository
 from .unit_of_work import UnitOfWork
+from .webhooks import router as provider_router
 
-app = FastAPI(title="Agent-Pay Reference", version="0.3.0")
+app = FastAPI(title="Agent-Pay Reference", version="0.4.0")
+app.include_router(provider_router)
 
 
 class Money(BaseModel):
