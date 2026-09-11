@@ -11,13 +11,15 @@ class ProviderOutcome(StrEnum):
 
 
 class PaymentProvider:
-    def charge(self, payment_id: str, amount_minor: int, currency: str) -> ProviderOutcome:
+    def charge(self, payment_id: str, amount_minor: int, currency: str, idempotency_key: str) -> ProviderOutcome:
         raise NotImplementedError
 
 
 @dataclass
 class MockProvider(PaymentProvider):
     outcome: ProviderOutcome = ProviderOutcome.SUCCEEDED
+    calls: int = 0
 
-    def charge(self, payment_id: str, amount_minor: int, currency: str) -> ProviderOutcome:
+    def charge(self, payment_id: str, amount_minor: int, currency: str, idempotency_key: str) -> ProviderOutcome:
+        self.calls += 1
         return self.outcome
