@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from agent_pay.api import app
+from agent_pay.api import CreatePayment, app, request_fingerprint
 
 
 client = TestClient(app)
@@ -38,3 +38,24 @@ def test_payment_requires_bearer_auth(monkeypatch):
         },
     )
     assert response.status_code == 401
+
+
+def test_request_fingerprint_is_stable():
+    request = CreatePayment.model_validate({
+        "agent_id": "00000000-0000-0000-0000-000000000001",
+        "account_id": "00000000-0000-0000-0000-000000000002",
+        "amount": {"value": "10.00", "currency": "USD"},
+        "purpose": "test",
+    })
+    assert request_fingerprint(request) == request_fingerprint(request)
+
+
+def test_request_fingerprint_changes_on_material_intent_change():
+    base = CreatePayment.model_validate({
+        "agent_id": "00000000-0000-0000-0000-000000000001",
+        "account_id": "00000000-0000-0000-0000-000000000002",
+        "amount": {"value": "10.00", "currency": "USD"},
+        "purpose": "test",
+    })
+    changed = base.model_copy(update={"purpose": "different"})
+    assert request_fingerprint(base) != request_fingerprint(changed)
