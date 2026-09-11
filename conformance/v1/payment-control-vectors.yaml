@@ -1,3 +1,69 @@
 version: 1
 suite: agent-pay-financial-control-v1
 purpose: Behavioral conformance vectors for financial-control invariants.
+
+vectors:
+  - id: authority-001
+    invariant: agent-never-owns-funds
+    expect: agent_requests_are_evaluated_against_account_authority
+  - id: authority-002
+    invariant: identity-is-not-spending-authority
+    given: authenticated_agent_without_active_delegation
+    expect: DENY
+  - id: policy-001
+    invariant: delegation-does-not-bypass-policy
+    given: denied_merchant_policy
+    expect: DENY
+  - id: budget-001
+    invariant: budget-reservation-is-independent
+    given: insufficient_budget
+    expect: no_provider_execution
+  - id: budget-002
+    invariant: budget-concurrency
+    given: one_remaining_budget_capacity_and_two_concurrent_requests
+    expect: exactly_one_reservation_succeeds
+  - id: approval-001
+    invariant: approval-binds-to-exact-intent
+    given: approval_for_amount_100
+    when: amount_changes_to_101
+    expect: prior_approval_invalidated
+  - id: auth-001
+    invariant: payment-authentication-is-separate
+    given: provider_requires_step_up
+    expect: AUTHENTICATION_REQUIRED
+  - id: provider-001
+    invariant: timeout-is-not-failure
+    given: ambiguous_provider_outcome
+    expect: UNKNOWN_EXTERNAL_OUTCOME
+  - id: provider-002
+    invariant: provider-event-deduplication
+    given: duplicate_provider_event
+    expect: no_duplicate_financial_effect
+  - id: ledger-001
+    invariant: double-entry-balance
+    given: posted_journal
+    expect: debits_equal_credits_per_currency
+  - id: ledger-002
+    invariant: historical-records-append-only
+    given: posted_entry_requires_correction
+    expect: compensating_entry_preserves_original
+  - id: idempotency-001
+    invariant: financial-idempotency
+    given: repeated_identical_request
+    expect: original_result_without_duplicate_execution
+  - id: idempotency-002
+    invariant: idempotency-key-request-binding
+    given: reused_key_with_materially_different_request
+    expect: CONFLICT
+  - id: outbox-001
+    invariant: outbox-atomicity
+    given: successful_financial_state_change
+    expect: matching_outbox_record_committed
+  - id: reconciliation-001
+    invariant: settlement-is-distinct
+    given: successful_payment_without_settlement
+    expect: settlement_remains_distinct
+  - id: security-001
+    invariant: no-primary-credentials-to-agent
+    given: payment_authentication_required
+    expect: no_otp_cvv_private_key_or_primary_financial_credential_in_agent_response
