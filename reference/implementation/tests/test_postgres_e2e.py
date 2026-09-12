@@ -61,13 +61,13 @@ def test_postgres_timeout_webhook_settlement_e2e():
 
         mismatch_reference = f"set_mismatch_{uuid4()}"
         assert SettlementRepository(conn).ingest(provider_name="mock", settlement_reference=mismatch_reference, provider_reference=settlement["provider_reference"], observed_amount="24.00", observed_currency=currency) == "DISCREPANCY"
-        assert conn.execute("SELECT status, discrepancy_code FROM reconciliation_records rr JOIN settlements s ON s.id=rr.settlement_id WHERE s.settlement_reference=%s", (mismatch_reference,)).fetchone() == ("DISCREPANCY", "AMOUNT_MISMATCH")
+        assert conn.execute("SELECT rr.status, rr.discrepancy_code FROM reconciliation_records rr JOIN settlements s ON s.id=rr.settlement_id WHERE s.settlement_reference=%s", (mismatch_reference,)).fetchone() == ("DISCREPANCY", "AMOUNT_MISMATCH")
 
         currency_reference = f"set_currency_{uuid4()}"
         assert SettlementRepository(conn).ingest(provider_name="mock", settlement_reference=currency_reference, provider_reference=settlement["provider_reference"], observed_amount=settlement["amount"], observed_currency="EUR") == "DISCREPANCY"
-        assert conn.execute("SELECT status, discrepancy_code FROM reconciliation_records rr JOIN settlements s ON s.id=rr.settlement_id WHERE s.settlement_reference=%s", (currency_reference,)).fetchone() == ("DISCREPANCY", "CURRENCY_MISMATCH")
+        assert conn.execute("SELECT rr.status, rr.discrepancy_code FROM reconciliation_records rr JOIN settlements s ON s.id=rr.settlement_id WHERE s.settlement_reference=%s", (currency_reference,)).fetchone() == ("DISCREPANCY", "CURRENCY_MISMATCH")
 
         unknown_reference = f"set_unknown_{uuid4()}"
         assert SettlementRepository(conn).ingest(provider_name="mock", settlement_reference=unknown_reference, provider_reference="provider-ref-does-not-exist", observed_amount=amount, observed_currency=currency) == "DISCREPANCY"
-        assert conn.execute("SELECT status, discrepancy_code FROM reconciliation_records rr JOIN settlements s ON s.id=rr.settlement_id WHERE s.settlement_reference=%s", (unknown_reference,)).fetchone() == ("DISCREPANCY", "UNKNOWN_PROVIDER_REFERENCE")
+        assert conn.execute("SELECT rr.status, rr.discrepancy_code FROM reconciliation_records rr JOIN settlements s ON s.id=rr.settlement_id WHERE s.settlement_reference=%s", (unknown_reference,)).fetchone() == ("DISCREPANCY", "UNKNOWN_PROVIDER_REFERENCE")
         assert conn.execute("SELECT count(*) FROM ledger_journals WHERE reference_id=%s", (payment_id,)).fetchone()[0] == 1
