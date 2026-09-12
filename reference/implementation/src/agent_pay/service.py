@@ -46,8 +46,13 @@ class PaymentService:
         return result
 
     def _execute(self, intent: PaymentIntent, decision: Decision) -> PaymentResult:
+        provider = self.provider
+        selector = getattr(provider, "for_payment", None)
+        if selector is not None:
+            provider = selector(intent.merchant_domain, intent.amount.currency)
+
         provider_key = f"payment:{intent.payment_id}:charge"
-        outcome = self.provider.charge(
+        outcome = provider.charge(
             intent.payment_id,
             int(intent.amount.value * Decimal("100")),
             intent.amount.currency,
