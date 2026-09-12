@@ -23,6 +23,12 @@ class PaymentService:
         self.provider = provider
         self._idempotency: dict[str, tuple[tuple, PaymentResult]] = {}
 
+    def _provider_for(self, intent: PaymentIntent) -> PaymentProvider:
+        selector = getattr(self.provider, "for_payment", None)
+        if selector is None:
+            return self.provider
+        return selector(intent.merchant_domain, intent.amount.currency)
+
     def create_payment(self, intent: PaymentIntent) -> PaymentResult:
         previous = self._idempotency.get(intent.idempotency_key)
         fingerprint = intent.fingerprint()
@@ -38,19 +44,22 @@ class PaymentService:
         elif decision == Decision.REQUIRE_APPROVAL:
             result = PaymentResult(intent.payment_id, PaymentStatus.APPROVAL_REQUIRED, decision)
         else:
+            # Resolve routing before reserving budget so a missing route has no financial side effect.
+            provider = self._provider_for(intent)
             if not self.budget.reserve(intent.amount.value):
                 result = PaymentResult(intent.payment_id, PaymentStatus.FAILED, Decision.DENY)
             else:
-                result = self._execute(intent, decision)
+                result = self._execute(intent, decision, provider)
         self._idempotency[intent.idempotency_key] = (fingerprint, result)
         return result
 
-    def _execute(self, intent: PaymentIntent, decision: Decision) -> PaymentResult:
-        provider = self.provider
-        selector = getattr(provider, "for_payment", None)
-        if selector is not None:
-            provider = selector(intent.merchant_domain, intent.amount.currency)
-
+    def _execute(
+        self,
+        intent: PaymentIntent,
+        decision: Decision,
+        provider: PaymentProvider | None = None,
+    ) -> PaymentResult:
+        provider = provider or self._provider_for(intent)
         provider_key = f"payment:{intent.payment_id}:charge"
         outcome = provider.charge(
             intent.payment_id,
