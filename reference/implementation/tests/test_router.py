@@ -49,7 +49,7 @@ def test_payment_service_uses_router_selected_rail() -> None:
     router.register("card", card)
 
     service = PaymentService(
-        SpendingPolicy(max_amount=Decimal("100")),
+        SpendingPolicy(per_transaction_limit=Decimal("100")),
         Budget(Decimal("100")),
         router,
     )
