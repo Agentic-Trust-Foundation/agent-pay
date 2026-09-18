@@ -15,6 +15,18 @@ vectors:
     invariant: delegation-does-not-bypass-policy
     given: denied_merchant_policy
     expect: DENY
+  - id: policy-002
+    invariant: policy-decision-is-reconstructable
+    given: deterministic_policy_snapshot_and_evaluation_context
+    expect: decision_contains_policy_version_reasons_and_evaluated_rules
+  - id: authorization-001
+    invariant: financial-engine-consumes-upstream-authority
+    given: normalized_atf_authorization_context
+    expect: validate_subject_scope_amount_currency_and_expiry
+  - id: authorization-002
+    invariant: invalid-authority-fails-closed
+    given: expired_or_mismatched_authorization_evidence
+    expect: DENY
   - id: budget-001
     invariant: budget-reservation-is-independent
     given: insufficient_budget
