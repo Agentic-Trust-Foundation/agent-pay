@@ -1,0 +1,33 @@
+version: 1
+suite: atf-agent-pay-cross-repository-v1
+purpose: Shared boundary vectors consumed by ATF and Agent-Pay conformance checks.
+
+vectors:
+  - id: contract-001
+    invariant: atf-owns-general-authorization
+    given: agent-pay-receives-normalized-authorization-context
+    expect: agent-pay-must-not-mint-general-authorization
+  - id: contract-002
+    invariant: payment-scope-is-explicit
+    given: authorization-context-without-payment-scope
+    expect: DENY
+  - id: contract-003
+    invariant: financial-authority-is-bounded
+    given: authorization-context-with-max-amount-and-currency
+    expect: payment-must-not-exceed-authorized-bound
+  - id: contract-004
+    invariant: policy-does-not-create-authority
+    given: spending-policy-allows-payment-but-atf-authority-is-invalid
+    expect: DENY
+  - id: contract-005
+    invariant: approval-does-not-expand-authority
+    given: approval-for-amount-above-atf-max
+    expect: DENY
+  - id: contract-006
+    invariant: evidence-version-is-retained
+    given: accepted-authorization-evidence
+    expect: payment-decision-retains-evidence-reference-and-version
+  - id: contract-007
+    invariant: payment-and-settlement-are-distinct
+    given: successful-payment
+    expect: settlement-remains-a-separate-external-assertion
