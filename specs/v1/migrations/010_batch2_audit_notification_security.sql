@@ -22,6 +22,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_notifications_source_event
 CREATE INDEX IF NOT EXISTS ix_notifications_delivery
     ON notifications(status, available_at, created_at);
 
+ALTER TABLE outbox_events
+    ADD COLUMN IF NOT EXISTS last_error TEXT;
+
 ALTER TABLE provider_events
     ADD COLUMN IF NOT EXISTS payload_digest TEXT;
 
