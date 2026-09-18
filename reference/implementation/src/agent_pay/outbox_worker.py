@@ -67,5 +67,6 @@ def process_once(*, limit: int = 50) -> int:
                     mark_failed(
                         conn, UUID(str(event_id)),
                         retry_after_seconds=min(300, 2 ** min(attempts, 8)),
+                        error=str(exc)[:1000],
                     )
     return processed
