@@ -98,7 +98,7 @@ Implemented on `main`:
 
 ## Stage 4 — Executable Reference Platform
 
-The reference implementation now contains the first executable platform layers:
+The reference implementation contains the executable platform layers:
 
 - PostgreSQL connection and repository layer;
 - explicit Unit of Work / transaction boundaries;
@@ -111,13 +111,25 @@ The reference implementation now contains the first executable platform layers:
 - explicit `UNKNOWN_EXTERNAL_OUTCOME` handling;
 - transactional outbox and `FOR UPDATE SKIP LOCKED` claiming;
 - local Docker Compose PostgreSQL bootstrap;
-- PostgreSQL-backed CI validation and integration tests.
+- PostgreSQL-backed CI validation and integration tests;
+- payment instrument integrity and credential-free instrument model.
 
-The reference stack can therefore exercise the core control path against real PostgreSQL rather than only an in-memory model.
+## V1 Validation Status
 
-## Current Status
+The repository has reached **V1 release-candidate validation complete** on `main`.
 
-The repository is **an executable reference platform, not a production payment processor**. The protocol and architecture baseline are substantially converged. Remaining implementation layers include production OIDC/JWT verification, cryptographic authorization-evidence verification, secure tokenization/vault boundaries, real provider adapters, signed webhook ingestion, settlement/reconciliation workers, complete policy DSL evaluation, approval/notification UX, risk/fraud controls, and regulatory/compliance hardening.
+Release-candidate commit:
+
+`f66c963bcd3e367061e4ca048154e1af6fd03c1b`
+
+The required CI gates for that commit are green:
+
+- full reference implementation validation;
+- PostgreSQL migrations through migration 009;
+- V1 conformance suite;
+- clean Docker Compose bootstrap.
+
+The current implementation is a **validated reference platform, not a production payment processor**. Production deployment still requires live provider integrations, issuer/tokenization infrastructure, deployment-specific security review, regulatory/compliance controls, and operational readiness.
 
 ## Scope
 
@@ -139,3 +151,13 @@ The repository is **an executable reference platform, not a production payment p
 - Audit and notifications
 - Agentic commerce context integration
 - Agentic Trust Foundation authorization-evidence integration
+
+### Explicitly outside V1
+
+- Live bank/PSP integrations
+- Production virtual-card issuer integration
+- Universal ATF cryptographic evidence token format before ATF freezes it
+- Full dispute/chargeback operational workflow
+- Kafka/event-bus dependency
+- Mandatory microservice decomposition
+- Merchant/order/fulfillment system-of-record behavior
