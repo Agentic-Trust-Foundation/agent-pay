@@ -1,6 +1,7 @@
 """FastAPI surface for the PostgreSQL-backed reference implementation."""
 import hashlib
 import json
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -88,6 +89,7 @@ class AuthorizationEvidence(BaseModel):
     scope: list[str] = Field(default_factory=lambda: ["PAYMENT"])
     max_amount: str | None = None
     currency: str | None = None
+    expires_at: str | None = None
     digest: str | None = None
     version: str | None = None
 
@@ -280,7 +282,6 @@ def approve_payment(
             if approval[2] != "PENDING":
                 raise HTTPException(status_code=409, detail="approval is no longer pending")
             if approval[3] is not None:
-                from datetime import datetime, timezone
                 expiry = approval[3] if approval[3].tzinfo else approval[3].replace(tzinfo=timezone.utc)
                 if datetime.now(timezone.utc) >= expiry:
                     control.set_approval(approval_id, "EXPIRED", actor, "approval expired")
