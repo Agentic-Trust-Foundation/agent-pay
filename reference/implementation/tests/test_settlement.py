@@ -43,12 +43,14 @@ def test_settlement_matches_provider_operation():
             operation_id, provider_reference = _fixture(conn)
         result = SettlementRepository(conn).ingest(
             provider_name="mock", settlement_reference=f"settle_{uuid4()}",
-            provider_reference=provider_reference, observed_amount="25.00", observed_currency="usd",
+            provider_reference=provider_reference, observed_amount="25.00",
+            observed_currency="usd",
         )
         assert result == "MATCHED"
         row = conn.execute(
             """SELECT rr.status, rr.discrepancy_code, rr.provider_operation_id
-               FROM reconciliation_records rr WHERE rr.provider_operation_id=%s""", (operation_id,)
+               FROM reconciliation_records rr WHERE rr.provider_operation_id=%s""",
+            (operation_id,),
         ).fetchone()
         assert row == ("MATCHED", None, operation_id)
 
@@ -65,7 +67,8 @@ def test_settlement_amount_mismatch_does_not_mutate_payment():
             ).fetchone()[0]
         result = SettlementRepository(conn).ingest(
             provider_name="mock", settlement_reference=f"settle_{uuid4()}",
-            provider_reference=provider_reference, observed_amount="26.00", observed_currency="USD",
+            provider_reference=provider_reference, observed_amount="26.00",
+            observed_currency="USD",
         )
         assert result == "DISCREPANCY"
         assert conn.execute(
@@ -73,8 +76,70 @@ def test_settlement_amount_mismatch_does_not_mutate_payment():
             (operation_id,),
         ).fetchone()[0] == payment_status
         assert conn.execute(
-            "SELECT discrepancy_code FROM reconciliation_records WHERE provider_operation_id=%s", (operation_id,)
+            "SELECT discrepancy_code FROM reconciliation_records WHERE provider_operation_id=%s",
+            (operation_id,),
         ).fetchone()[0] == "AMOUNT_MISMATCH"
+
+
+def test_settlement_currency_mismatch_is_discrepancy():
+    if not os.getenv("DATABASE_URL"):
+        return
+    with connection() as conn:
+        with conn.transaction():
+            operation_id, provider_reference = _fixture(conn)
+        result = SettlementRepository(conn).ingest(
+            provider_name="mock", settlement_reference=f"settle_{uuid4()}",
+            provider_reference=provider_reference, observed_amount="25.00",
+            observed_currency="EUR",
+        )
+        assert result == "DISCREPANCY"
+        assert conn.execute(
+            "SELECT discrepancy_code FROM reconciliation_records WHERE provider_operation_id=%s",
+            (operation_id,),
+        ).fetchone()[0] == "CURRENCY_MISMATCH"
+
+
+def test_settlement_status_mismatch_is_discrepancy():
+    if not os.getenv("DATABASE_URL"):
+        return
+    with connection() as conn:
+        with conn.transaction():
+            operation_id, provider_reference = _fixture(conn, provider_status="FAILED")
+        result = SettlementRepository(conn).ingest(
+            provider_name="mock", settlement_reference=f"settle_{uuid4()}",
+            provider_reference=provider_reference, observed_amount="25.00",
+            observed_currency="USD",
+        )
+        assert result == "DISCREPANCY"
+        assert conn.execute(
+            "SELECT discrepancy_code FROM reconciliation_records WHERE provider_operation_id=%s",
+            (operation_id,),
+        ).fetchone()[0] == "STATUS_MISMATCH"
+
+
+def test_multiple_settlement_reports_for_one_operation_are_allowed():
+    if not os.getenv("DATABASE_URL"):
+        return
+    with connection() as conn:
+        with conn.transaction():
+            operation_id, provider_reference = _fixture(conn)
+        repo = SettlementRepository(conn)
+        first = repo.ingest(
+            provider_name="mock", settlement_reference=f"settle_{uuid4()}",
+            provider_reference=provider_reference, observed_amount="25.00",
+            observed_currency="USD",
+        )
+        second = repo.ingest(
+            provider_name="mock", settlement_reference=f"settle_{uuid4()}",
+            provider_reference=provider_reference, observed_amount="26.00",
+            observed_currency="USD",
+        )
+        assert first == "MATCHED"
+        assert second == "DISCREPANCY"
+        assert conn.execute(
+            "SELECT count(*) FROM reconciliation_records WHERE provider_operation_id=%s",
+            (operation_id,),
+        ).fetchone()[0] == 2
 
 
 def test_duplicate_settlement_report_is_noop():
@@ -85,10 +150,16 @@ def test_duplicate_settlement_report_is_noop():
             _, provider_reference = _fixture(conn)
         settlement_reference = f"settle_{uuid4()}"
         repo = SettlementRepository(conn)
-        assert repo.ingest(provider_name="mock", settlement_reference=settlement_reference,
-                           provider_reference=provider_reference, observed_amount="25.00", observed_currency="USD") == "MATCHED"
-        assert repo.ingest(provider_name="mock", settlement_reference=settlement_reference,
-                           provider_reference=provider_reference, observed_amount="25.00", observed_currency="USD") == "DUPLICATE"
+        assert repo.ingest(
+            provider_name="mock", settlement_reference=settlement_reference,
+            provider_reference=provider_reference, observed_amount="25.00",
+            observed_currency="USD",
+        ) == "MATCHED"
+        assert repo.ingest(
+            provider_name="mock", settlement_reference=settlement_reference,
+            provider_reference=provider_reference, observed_amount="25.00",
+            observed_currency="USD",
+        ) == "DUPLICATE"
         assert conn.execute(
             "SELECT count(*) FROM settlements WHERE provider_name='mock' AND settlement_reference=%s",
             (settlement_reference,),
@@ -101,6 +172,7 @@ def test_unknown_provider_reference_is_discrepancy():
     with connection() as conn:
         result = SettlementRepository(conn).ingest(
             provider_name="mock", settlement_reference=f"settle_{uuid4()}",
-            provider_reference=f"missing_{uuid4()}", observed_amount="10.00", observed_currency="USD",
+            provider_reference=f"missing_{uuid4()}", observed_amount="10.00",
+            observed_currency="USD",
         )
         assert result == "DISCREPANCY"
