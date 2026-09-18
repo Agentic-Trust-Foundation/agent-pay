@@ -9,10 +9,9 @@ from .unit_of_work import UnitOfWork
 class SettlementRepository:
     """Persist and reconcile one provider settlement report atomically.
 
-    V1 models a settlement report as a provider assertion about one provider
-    operation. The workflow never mutates payment or ledger truth merely because
-    a report arrived; reconciliation produces an explicit MATCHED/DISCREPANCY
-    conclusion instead.
+    A settlement report is a provider assertion about one provider operation.
+    Reconciliation records the conclusion but never mutates payment, budget, or
+    ledger truth automatically.
     """
 
     def __init__(self, conn):
@@ -29,28 +28,43 @@ class SettlementRepository:
         reported_at=None,
         settled_at=None,
     ) -> str:
+        provider_name = provider_name.strip()
+        settlement_reference = settlement_reference.strip()
+        provider_reference = provider_reference.strip()
         observed_amount_d = Decimal(str(observed_amount))
         observed_currency = observed_currency.strip().upper()
 
-        with UnitOfWork(self.conn):
-            existing = self.conn.execute(
-                """SELECT id, status FROM settlements
-                   WHERE provider_name=%s AND settlement_reference=%s
-                   FOR UPDATE""",
-                (provider_name, settlement_reference),
-            ).fetchone()
-            if existing:
-                return "DUPLICATE"
+        if not provider_name or not settlement_reference or not provider_reference:
+            raise ValueError("provider and settlement references are required")
+        if observed_amount_d <= 0:
+            raise ValueError("observed settlement amount must be positive")
+        if len(observed_currency) != 3:
+            raise ValueError("observed settlement currency must be ISO-4217 alpha-3")
 
-            settlement_id = self.conn.execute(
+        with UnitOfWork(self.conn):
+            # The database unique constraint is the concurrency/idempotency
+            # boundary. ON CONFLICT avoids a race between SELECT and INSERT.
+            inserted = self.conn.execute(
                 """INSERT INTO settlements
                    (provider_name, settlement_reference, currency, amount,
                     status, reported_at, settled_at)
                    VALUES (%s,%s,%s,%s,'REPORTED',%s,%s)
+                   ON CONFLICT (provider_name, settlement_reference) DO NOTHING
                    RETURNING id""",
-                (provider_name, settlement_reference, observed_currency,
-                 observed_amount_d, reported_at, settled_at),
-            ).fetchone()[0]
+                (
+                    provider_name,
+                    settlement_reference,
+                    observed_currency,
+                    observed_amount_d,
+                    reported_at,
+                    settled_at,
+                ),
+            ).fetchone()
+
+            if not inserted:
+                return "DUPLICATE"
+
+            settlement_id = inserted[0]
 
             operation = self.conn.execute(
                 """SELECT po.id, po.status, po.provider_reference,
@@ -81,13 +95,9 @@ class SettlementRepository:
                 )
                 return "DISCREPANCY"
 
-            operation_id, operation_status, operation_reference, expected_amount, expected_currency = operation
-            if operation_reference != provider_reference:
-                code = "PROVIDER_REFERENCE_MISMATCH"
-                status = "DISCREPANCY"
-            elif operation_status != "SUCCEEDED":
-                code = "STATUS_MISMATCH"
-                status = "DISCREPANCY"
+            operation_id, operation_status, _, expected_amount, expected_currency = operation
+            if operation_status != "SUCCEEDED":
+                status, code = "DISCREPANCY", "STATUS_MISMATCH"
             else:
                 status, code = compare_amounts(
                     expected_amount=expected_amount,
@@ -113,9 +123,15 @@ class SettlementRepository:
             return status
 
     def _record_reconciliation(
-        self, *, settlement_id: UUID, provider_operation_id: UUID | None,
-        status: str, expected_amount, observed_amount,
-        expected_currency: str | None, observed_currency: str,
+        self,
+        *,
+        settlement_id: UUID,
+        provider_operation_id: UUID | None,
+        status: str,
+        expected_amount,
+        observed_amount,
+        expected_currency: str | None,
+        observed_currency: str,
         discrepancy_code: str | None,
     ) -> UUID:
         return self.conn.execute(
@@ -125,7 +141,14 @@ class SettlementRepository:
                 observed_currency, discrepancy_code)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                RETURNING id""",
-            (settlement_id, provider_operation_id, status,
-             expected_amount, observed_amount, expected_currency,
-             observed_currency, discrepancy_code),
+            (
+                settlement_id,
+                provider_operation_id,
+                status,
+                expected_amount,
+                observed_amount,
+                expected_currency,
+                observed_currency,
+                discrepancy_code,
+            ),
         ).fetchone()[0]
