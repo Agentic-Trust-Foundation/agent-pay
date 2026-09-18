@@ -193,11 +193,12 @@ def create_payment(
                     raise HTTPException(status_code=403, detail=str(exc)) from exc
                 evidence_id = conn.execute(
                     """INSERT INTO authorization_evidence
-                       (account_id, agent_id, issuer, evidence_type, evidence_digest, source_reference, payload)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb) RETURNING id""",
+                       (account_id, agent_id, issuer_reference, evidence_type,
+                        subject_reference, evidence, verification_status)
+                       VALUES (%s,%s,%s,%s,%s,%s::jsonb,'UNVERIFIED') RETURNING id""",
                     (
                         request.account_id, request.agent_id, evidence.issuer,
-                        evidence.evidence_type, evidence.digest, evidence.evidence_id,
+                        evidence.evidence_type, evidence.evidence_id,
                         json.dumps(evidence.model_dump(mode="json")),
                     ),
                 ).fetchone()[0]
