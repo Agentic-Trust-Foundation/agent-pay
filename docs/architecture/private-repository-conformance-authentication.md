@@ -53,3 +53,7 @@ After the secret exists, verify the Agent-Pay conformance workflow on `main`. Th
 `cross-repository conformance OK: 7 vectors`
 
 This keeps both repositories private while preserving the V1 cross-repository contract gate.
+
+## CI verification marker
+
+2026-09-19: Triggered a documentation-only push to verify the private ATF repository authentication path in GitHub Actions.
