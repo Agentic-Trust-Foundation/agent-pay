@@ -75,14 +75,16 @@ def mark_published(conn, event_id: UUID) -> None:
     )
 
 
-def mark_failed(conn, event_id: UUID, *, retry_after_seconds: int = 30) -> None:
+def mark_failed(conn, event_id: UUID, *, retry_after_seconds: int = 30,
+                error: str | None = None) -> None:
     """Return a failed publication to PENDING with deterministic backoff."""
     if retry_after_seconds < 0:
         raise ValueError("retry_after_seconds must be non-negative")
     conn.execute(
         """UPDATE outbox_events
            SET status='PENDING',
-               available_at=now() + (%s * interval '1 second')
+               available_at=now() + (%s * interval '1 second'),
+               last_error=%s
            WHERE id=%s AND status='PROCESSING'""",
-        (retry_after_seconds, event_id),
+        (retry_after_seconds, error, event_id),
     )
