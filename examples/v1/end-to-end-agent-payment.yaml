@@ -1,0 +1,79 @@
+version: 1
+scenario: agent-payment-v1-reference
+purpose: Canonical cross-boundary reference trace; illustrative identifiers only.
+
+authority:
+  source: agentic-trust
+  evidence_id: atf-evidence-001
+  issuer: atf-reference-issuer
+  agent_id: agent-demo
+  account_id: acct-demo
+  delegation_id: delegation-demo
+  scope:
+    - PAYMENT
+  max_amount: "100.00"
+  currency: USD
+  valid_until: "2026-12-31T23:59:59Z"
+  evidence_version: "1"
+
+payment_request:
+  request_id: payment-request-001
+  payment_id: payment-001
+  amount: "75.00"
+  currency: USD
+  merchant_domain: example.com
+  category: software
+  idempotency_key: demo-payment-001
+
+policy:
+  policy_id: policy-demo
+  policy_version: policy-v1
+  result: APPROVAL_REQUIRED
+  reason: amount_above_approval_threshold
+
+approval:
+  approval_id: approval-001
+  status: APPROVED
+  binding:
+    payment_request_id: payment-request-001
+    account_id: acct-demo
+    agent_id: agent-demo
+    amount: "75.00"
+    currency: USD
+    merchant_domain: example.com
+    policy_version: policy-v1
+    authorization_evidence_id: atf-evidence-001
+
+budget:
+  budget_id: budget-demo
+  reservation_status: RESERVED
+  amount: "75.00"
+  currency: USD
+
+provider:
+  operation: CHARGE
+  idempotency_key: payment:payment-001:charge
+  outcome: SUCCEEDED
+  provider_reference: provider-ref-001
+
+financial_effect:
+  payment_status: SUCCEEDED
+  transaction_status: POSTED
+  ledger:
+    balanced: true
+    currency: USD
+
+async_effects:
+  audit_event: PaymentSucceeded
+  outbox_event: PaymentSucceeded
+  notification: NotificationRequested
+
+settlement:
+  settlement_reference: settlement-001
+  observed_amount: "75.00"
+  observed_currency: USD
+  result: MATCHED
+
+terminal_state:
+  payment: SUCCEEDED
+  external_settlement: RECONCILED
