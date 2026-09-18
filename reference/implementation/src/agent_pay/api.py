@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .auth import require_agent, resolve_approval_bearer, resolve_bearer
+from .authorization import AuthorizationContext, AuthorizationError
 from .control import ControlRepository
 from .db import connection
 from .lifecycle_api import capture, refund, void
@@ -79,6 +80,18 @@ class PaymentItem(BaseModel):
     unit_price: str = Field(pattern=r"^\d+(\.\d{1,4})?$")
 
 
+class AuthorizationEvidence(BaseModel):
+    evidence_id: str
+    issuer: str
+    evidence_type: str = "ATF"
+    delegation_id: str | None = None
+    scope: list[str] = Field(default_factory=lambda: ["PAYMENT"])
+    max_amount: str | None = None
+    currency: str | None = None
+    digest: str | None = None
+    version: str | None = None
+
+
 class CreatePayment(BaseModel):
     agent_id: UUID
     account_id: UUID
@@ -88,6 +101,7 @@ class CreatePayment(BaseModel):
     amount: Money
     purpose: str = Field(min_length=1, max_length=500)
     items: list[PaymentItem] = Field(default_factory=list)
+    authorization_evidence: AuthorizationEvidence | None = None
 
 
 class ApprovalDecision(BaseModel):
@@ -151,17 +165,57 @@ def create_payment(
             if request.merchant:
                 merchant_id = repo.merchant(name=request.merchant.name, domain=request.merchant.domain)
             currency = request.amount.currency.upper()
+            evidence_id = None
+            if request.authorization_evidence:
+                evidence = request.authorization_evidence
+                try:
+                    auth = AuthorizationContext(
+                        evidence_id=evidence.evidence_id,
+                        issuer=evidence.issuer,
+                        agent_id=str(request.agent_id),
+                        account_id=str(request.account_id),
+                        delegation_id=evidence.delegation_id,
+                        scope=frozenset(evidence.scope),
+                        max_amount=Decimal(evidence.max_amount) if evidence.max_amount is not None else None,
+                        currency=evidence.currency,
+                        digest=evidence.digest,
+                        version=evidence.version,
+                    )
+                    auth.validate(
+                        agent_id=str(request.agent_id),
+                        account_id=str(request.account_id),
+                        amount=Decimal(request.amount.value),
+                        currency=currency,
+                    )
+                except (AuthorizationError, ValueError) as exc:
+                    raise HTTPException(status_code=403, detail=str(exc)) from exc
+                evidence_id = conn.execute(
+                    """INSERT INTO authorization_evidence
+                       (account_id, agent_id, issuer, evidence_type, evidence_digest, source_reference, payload)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb) RETURNING id""",
+                    (
+                        request.account_id, request.agent_id, evidence.issuer,
+                        evidence.evidence_type, evidence.digest, evidence.evidence_id,
+                        json.dumps(evidence.model_dump(mode="json")),
+                    ),
+                ).fetchone()[0]
+
             request_id = repo.create_request(
                 account_id=request.account_id, agent_id=request.agent_id, amount=request.amount.value,
                 currency=currency, purpose=request.purpose, items=[i.model_dump() for i in request.items],
                 idempotency_key=idempotency_key, request_fingerprint=fingerprint, merchant_id=merchant_id,
             )
+            if evidence_id:
+                conn.execute(
+                    "UPDATE payment_requests SET authorization_evidence_id=%s WHERE id=%s",
+                    (evidence_id, request_id),
+                )
             payment_id = repo.create_payment(request_id=request_id, amount=request.amount.value,
                                              currency=currency, status="POLICY_CHECK")
             domain = request.merchant.domain if request.merchant and request.merchant.domain else ""
             category = request.merchant.category if request.merchant else None
             try:
-                decision, version_id, _ = control.evaluate_policy(
+                decision, version_id, _, policy_evidence = control.evaluate_policy(
                     account_id=request.account_id, policy_id=request.policy_id,
                     payment_request_id=request_id, agent_id=request.agent_id, payment_id=payment_id,
                     amount=Decimal(request.amount.value), currency=currency, merchant_domain=domain, category=category,
@@ -173,7 +227,7 @@ def create_payment(
                 if decision.value == "DENY":
                     repo.update_status(payment_id, "FAILED")
                     enqueue(conn, event_type="PaymentFailed", aggregate_type="payment", aggregate_id=payment_id,
-                            payload={"reason": "POLICY_DENIED", "policy_version_id": str(version_id)}, correlation_id=correlation_id)
+                            payload={"reason": "POLICY_DENIED", "policy_version_id": str(version_id), "policy_decision": policy_evidence}, correlation_id=correlation_id)
                     deferred_error = (403, "payment denied by policy")
                 else:
                     budget_id = control.select_budget(request.account_id, request.budget_id, currency, policy_id)
@@ -188,7 +242,7 @@ def create_payment(
                             approval_id = control.create_approval(request_id, reason="policy requires approval")
                             repo.update_status(payment_id, "APPROVAL_REQUIRED")
                             enqueue(conn, event_type="ApprovalRequested", aggregate_type="payment", aggregate_id=payment_id,
-                                    payload={"approval_id": str(approval_id), "policy_version_id": str(version_id), "budget_id": str(budget_id)},
+                                    payload={"approval_id": str(approval_id), "policy_version_id": str(version_id), "budget_id": str(budget_id), "policy_decision": policy_evidence},
                                     correlation_id=correlation_id)
                             return {"payment_id": str(payment_id), "status": "APPROVAL_REQUIRED", "approval_id": str(approval_id), "correlation_id": correlation_id}
                         orchestrator = PaymentOrchestrator(conn, MockProvider())
@@ -197,7 +251,7 @@ def create_payment(
                         if decision.value == "ALLOW_NOTIFY":
                             enqueue(conn, event_type="NotificationRequested", aggregate_type="payment", aggregate_id=payment_id,
                                     payload={"type": "PAYMENT_EXECUTION", "amount": request.amount.value, "currency": currency}, correlation_id=correlation_id)
-                        return {"payment_id": str(payment_id), "status": "PROCESSING", "decision": decision.value, "correlation_id": correlation_id}
+                        return {"payment_id": str(payment_id), "status": "PROCESSING", "decision": decision.value, "policy_evidence": policy_evidence, "correlation_id": correlation_id}
 
     if deferred_error:
         status, message = deferred_error
@@ -225,6 +279,12 @@ def approve_payment(
                 raise HTTPException(status_code=404, detail="approval not found")
             if approval[2] != "PENDING":
                 raise HTTPException(status_code=409, detail="approval is no longer pending")
+            if approval[3] is not None:
+                from datetime import datetime, timezone
+                expiry = approval[3] if approval[3].tzinfo else approval[3].replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) >= expiry:
+                    control.set_approval(approval_id, "EXPIRED", actor, "approval expired")
+                    raise HTTPException(status_code=409, detail="approval has expired")
             req = control.payment_request(approval[1])
             if not req:
                 raise HTTPException(status_code=404, detail="payment request not found")
@@ -232,6 +292,8 @@ def approve_payment(
                 raise HTTPException(status_code=409, detail="payment is not awaiting approval")
             if not req[8]:
                 raise HTTPException(status_code=409, detail="payment has no bound budget")
+            if approval[6] != control.approval_binding_digest(approval[1]):
+                raise HTTPException(status_code=409, detail="approval binding no longer matches payment intent")
             control.set_approval(approval_id, "APPROVED", actor, decision.reason if decision else None)
             orchestrator = PaymentOrchestrator(conn, MockProvider())
             orchestrator.prepare(payment_id=req[10], payment_request_id=req[0], budget_id=req[8],
