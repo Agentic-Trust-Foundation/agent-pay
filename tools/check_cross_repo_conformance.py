@@ -1,24 +1,65 @@
 """Verify the V1 ATF <-> Agent-Pay shared contract."""
+
+import base64
+import json
+import os
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / "conformance" / "v1" / "atf-agent-pay-contract-vectors.yaml"
-ATF_URL = (
-    "https://raw.githubusercontent.com/"
-    "Agentic-Trust-Foundation/agentic-trust/main/"
-    "conformance/v1/agent-pay-contract-vectors.yaml"
+
+ATF_API_URL = (
+    "https://api.github.com/repos/Agentic-Trust-Foundation/"
+    "agentic-trust/contents/conformance/v1/agent-pay-contract-vectors.yaml"
 )
 
 
-def load_yaml(path_or_url: str):
-    if path_or_url.startswith("http"):
-        with urlopen(path_or_url, timeout=15) as response:
-            return yaml.safe_load(response.read().decode("utf-8"))
-    return yaml.safe_load(Path(path_or_url).read_text(encoding="utf-8"))
+def load_local(path: Path):
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def load_atf():
+    token = os.environ.get("ATF_REPO_TOKEN")
+    if not token:
+        raise SystemExit(
+            "ATF_REPO_TOKEN is required to read the private agentic-trust "
+            "conformance vector from GitHub."
+        )
+
+    request = Request(
+        ATF_API_URL,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "agent-pay-cross-repo-conformance",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise SystemExit(
+            f"Unable to read private ATF conformance vector from GitHub "
+            f"(HTTP {exc.code}). Check ATF_REPO_TOKEN permissions."
+        ) from exc
+    except URLError as exc:
+        raise SystemExit(
+            f"Unable to reach GitHub while reading the private ATF "
+            f"conformance vector: {exc.reason}"
+        ) from exc
+
+    if payload.get("encoding") != "base64" or "content" not in payload:
+        raise SystemExit("GitHub did not return the expected ATF file content.")
+
+    content = base64.b64decode(payload["content"]).decode("utf-8")
+    return yaml.safe_load(content)
 
 
 def normalized(document):
@@ -37,8 +78,8 @@ def normalized(document):
 
 
 def main():
-    local = load_yaml(str(LOCAL))
-    remote = load_yaml(ATF_URL)
+    local = load_local(LOCAL)
+    remote = load_atf()
     if normalized(local) != normalized(remote):
         raise SystemExit("ATF-Agent-Pay cross-repository vectors are inconsistent")
     print(f"cross-repository conformance OK: {len(local['vectors'])} vectors")
