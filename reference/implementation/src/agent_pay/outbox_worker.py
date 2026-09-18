@@ -61,7 +61,7 @@ def process_once(*, limit: int = 50) -> int:
                         )
                     mark_published(conn, UUID(str(event_id)))
             processed += 1
-        except Exception:
+        except Exception as exc:
             with connection() as conn:
                 with UnitOfWork(conn):
                     mark_failed(
