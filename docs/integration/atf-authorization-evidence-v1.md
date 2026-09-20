@@ -37,6 +37,24 @@ Identity or delegation evidence alone never grants spending capacity. Agent-Pay 
 
 The financial operation stores a stable evidence reference/digest and the effective authorization context used for the decision. Historical evidence references are not silently rewritten when the upstream delegation changes.
 
-## V1 boundary
+## V1 verification profile
 
-V1 defines the persistence and binding boundary but does not freeze an ATF cryptographic token format. Once ATF's protocol evidence format is finalized, the reference implementation can add a verifier adapter without changing the Agent-Pay financial lifecycle.
+The financial lifecycle now requires **cryptographically verified** authority evidence. The reference implementation provides a JWT/JWKS verification adapter configured with:
+
+- trusted ATF issuer;
+- Agent-Pay audience;
+- trusted JWKS endpoint;
+- `atf/v1` protocol version;
+- explicit `ALLOW` decision;
+- `PAYMENT` action/scope;
+- agent/account binding;
+- positive maximum amount and matching currency;
+- expiry;
+- `VALID` revocation status;
+- stable evidence ID and version.
+
+The JWT/JWKS profile is an implementation adapter, not a claim that ATF V1 has frozen one universal credential format.
+
+Unverified evidence cannot be bound to a payment request. PostgreSQL also rejects a payment request that references anything other than `VERIFIED` authorization evidence.
+
+This preserves the V1 boundary: ATF remains responsible for producing/verifying authority, while Agent-Pay requires a trusted verifier at its integration seam and never mints or expands general authorization.
