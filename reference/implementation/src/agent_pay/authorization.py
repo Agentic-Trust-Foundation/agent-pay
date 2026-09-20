@@ -41,10 +41,16 @@ class AuthorizationContext:
             raise AuthorizationError("requested action is outside authorization scope")
         if amount <= 0:
             raise AuthorizationError("payment amount must be positive")
-        if self.max_amount is not None and amount > self.max_amount:
+        if self.max_amount is None or self.max_amount <= 0:
+            raise AuthorizationError("authorized maximum amount is required")
+        if amount > self.max_amount:
             raise AuthorizationError("payment exceeds authorized amount")
-        if self.currency is not None and self.currency.upper() != currency.upper():
+        if not self.currency:
+            raise AuthorizationError("authorized currency is required")
+        if self.currency.upper() != currency.upper():
             raise AuthorizationError("payment currency is outside authorization")
+        if self.valid_until is None:
+            raise AuthorizationError("authorization expiry is required")
         if self.valid_until is not None:
             expiry = self.valid_until
             if expiry.tzinfo is None:
