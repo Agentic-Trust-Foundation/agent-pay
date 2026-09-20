@@ -2,7 +2,13 @@
 
 Agent-Pay is the financial control and payment layer for the agentic internet.
 
-It enables agents to initiate payments under explicit delegated authority, financial policies, budgets, approvals, risk controls, and payment constraints without giving agents unrestricted access to money or primary financial credentials.
+## V1 Status
+
+**Agent-Pay Protocol V1 and its reference implementation are frozen on `main` as the V1 baseline.**
+
+V1 is a protocol + conformance + reference-implementation release. It is **not** a claim that a live PSP, bank, card issuer, regulatory environment, or production key-management deployment has been integrated.
+
+Release scope and verification gates are recorded in `docs/release/v1-final-2026-09.md`.
 
 ## Core Principle
 
@@ -29,8 +35,9 @@ API
  ↓
 Authenticated Agent Principal
  ↓
+Verified ATF Authority
+ ↓
 Agent-Pay Core
- ├── Agent / Delegation / Authorization Context
  ├── Policy / Policy Version
  ├── Budget / Reservation
  ├── Approval
@@ -45,119 +52,39 @@ PostgreSQL + Transactional Outbox
 Provider / Payment Rail Adapters
 ```
 
-Redis may support operational acceleration but never becomes financial source of truth.
-
 ## Financial Control Model
 
 ```text
-Delegation = What authority was granted?
-Policy     = Under what conditions may it be spent?
-Budget     = How much allocated capacity remains?
-Approval   = Does this exact intent require human approval?
-Payment    = How is the financial operation executed?
-Transaction= What economic operation occurred?
-Ledger     = What is the authoritative accounting record?
+ATF Authority = Is the agent authorized to act?
+Policy        = Under what financial conditions may it spend?
+Budget        = How much allocated capacity remains?
+Approval      = Does this exact intent require human approval?
+Payment       = How is the financial operation executed?
+Transaction   = What economic operation occurred?
+Ledger        = What is the authoritative accounting record?
 ```
 
 Passing one control never implies passing the others.
 
-## Canonical Payment Lifecycle
+## V1 Assets
 
-```text
-REQUESTED
- → VALIDATING
- → AUTHENTICATION_REQUIRED / AUTHENTICATED
- → POLICY_CHECK
- → BUDGET_CHECK
- → APPROVAL_REQUIRED / APPROVED
- → PAYMENT_PENDING
- → PROCESSING
- → SUCCEEDED / FAILED / UNKNOWN_EXTERNAL_OUTCOME
-```
+- normative protocol and architecture documents;
+- OpenAPI V1 contract;
+- PostgreSQL schema plus ordered convergence migrations 001–011;
+- V1 JSON Schema / conformance vectors;
+- PostgreSQL-backed reference implementation;
+- cryptographic ATF evidence verification adapter;
+- OIDC/JWT agent authentication boundary;
+- budget, approval, provider-operation, webhook, settlement, reconciliation and ledger integrity tests;
+- Docker Compose clean-environment bootstrap;
+- GitHub Actions validation.
 
-External timeout does not automatically mean failure. Refund, reversal/void, settlement, dispute, and reconciliation are separate auditable financial operations.
+## V1 Boundary
 
-## Stage 3 — Consistency Convergence
+V1 intentionally does **not** freeze a universal ATF credential/token format. The reference implementation defines a JWT/JWKS verification profile as an adapter. Independent implementations may use another credential format as long as they produce the same normalized ATF authority semantics.
 
-The Master Project Schema is the architecture baseline and Stage 3 aligned the implementation artifacts around it.
+V1 also does not include live PSP/bank integrations, production card issuance, universal dispute/chargeback operations, or jurisdiction-specific compliance certification.
 
-Implemented on `main`:
+## License
 
-- canonical consistency/convergence gate;
-- converged OpenAPI lifecycle and RFC 9457-style errors;
-- first-class persistence migration for authorization evidence;
-- immutable policy-version model;
-- budget reservations;
-- payment authentication records;
-- provider operation/event persistence;
-- settlement and reconciliation persistence;
-- transactional outbox persistence;
-- double-entry-ready ledger journal/posting model;
-- behavioral V1 conformance vectors;
-- V1 payment-intent JSON Schema.
-
-## Stage 4 — Executable Reference Platform
-
-The reference implementation contains the executable platform layers:
-
-- PostgreSQL connection and repository layer;
-- explicit Unit of Work / transaction boundaries;
-- row-locked budget reservations;
-- persistent double-entry journals and postings;
-- provider operation idempotency;
-- fail-closed authentication boundary and agent/account principal binding;
-- external provider adapter boundary;
-- payment execution worker primitive with external calls outside DB transactions;
-- explicit `UNKNOWN_EXTERNAL_OUTCOME` handling;
-- transactional outbox and `FOR UPDATE SKIP LOCKED` claiming;
-- local Docker Compose PostgreSQL bootstrap;
-- PostgreSQL-backed CI validation and integration tests;
-- payment instrument integrity and credential-free instrument model.
-
-## V1 Validation Status
-
-The repository has reached **V1 release-candidate validation complete** on `main`.
-
-Release-candidate commit:
-
-`f66c963bcd3e367061e4ca048154e1af6fd03c1b`
-
-The required CI gates for that commit are green:
-
-- full reference implementation validation;
-- PostgreSQL migrations through migration 009;
-- V1 conformance suite;
-- clean Docker Compose bootstrap.
-
-The current implementation is a **validated reference platform, not a production payment processor**. Production deployment still requires live provider integrations, issuer/tokenization infrastructure, deployment-specific security review, regulatory/compliance controls, and operational readiness.
-
-## Scope
-
-### In scope
-
-- Wallets and funding
-- Payment instruments and future virtual-card integration
-- Payment Intent / Payment Request
-- Spending Policy and Policy Versioning
-- Budgets and reservations
-- Approval workflows
-- Payment authentication boundary
-- Payment routing and provider integration
-- Transaction lifecycle
-- Settlement and reconciliation
-- Refunds and reversals
-- Financial ledger
-- Provider webhooks/events
-- Audit and notifications
-- Agentic commerce context integration
-- Agentic Trust Foundation authorization-evidence integration
-
-### Explicitly outside V1
-
-- Live bank/PSP integrations
-- Production virtual-card issuer integration
-- Universal ATF cryptographic evidence token format before ATF freezes it
-- Full dispute/chargeback operational workflow
-- Kafka/event-bus dependency
-- Mandatory microservice decomposition
-- Merchant/order/fulfillment system-of-record behavior
+Apache-2.0.
