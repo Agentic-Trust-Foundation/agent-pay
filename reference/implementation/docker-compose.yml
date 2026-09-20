@@ -9,15 +9,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../../specs/v1/database-schema.sql:/docker-entrypoint-initdb.d/10-base-schema.sql:ro
-      - ../../specs/v1/migrations/001_stage4_convergence.sql:/docker-entrypoint-initdb.d/20-stage4-convergence.sql:ro
-      - ../../specs/v1/migrations/002_ledger_accounts.sql:/docker-entrypoint-initdb.d/30-ledger-accounts.sql:ro
-      - ../../specs/v1/migrations/003_execution_integrity.sql:/docker-entrypoint-initdb.d/40-execution-integrity.sql:ro
-      - ../../specs/v1/migrations/004_control_binding.sql:/docker-entrypoint-initdb.d/50-control-binding.sql:ro
-      - ../../specs/v1/migrations/005_reconciliation_integrity.sql:/docker-entrypoint-initdb.d/60-reconciliation-integrity.sql:ro
-      - ../../specs/v1/migrations/006_payment_lifecycle.sql:/docker-entrypoint-initdb.d/70-payment-lifecycle.sql:ro
-      - ../../specs/v1/migrations/007_settlement_reconciliation_integrity.sql:/docker-entrypoint-initdb.d/80-settlement-reconciliation-integrity.sql:ro
-      - ../../specs/v1/migrations/008_reconciliation_multiple_settlements.sql:/docker-entrypoint-initdb.d/90-reconciliation-multiple-settlements.sql:ro
+      - ../../specs/v1/database-schema.sql:/docker-entrypoint-initdb.d/010-base-schema.sql:ro
+      - ../../specs/v1/migrations/001_stage4_convergence.sql:/docker-entrypoint-initdb.d/020-stage4-convergence.sql:ro
+      - ../../specs/v1/migrations/002_ledger_accounts.sql:/docker-entrypoint-initdb.d/030-ledger-accounts.sql:ro
+      - ../../specs/v1/migrations/003_execution_integrity.sql:/docker-entrypoint-initdb.d/040-execution-integrity.sql:ro
+      - ../../specs/v1/migrations/004_control_binding.sql:/docker-entrypoint-initdb.d/050-control-binding.sql:ro
+      - ../../specs/v1/migrations/005_reconciliation_integrity.sql:/docker-entrypoint-initdb.d/060-reconciliation-integrity.sql:ro
+      - ../../specs/v1/migrations/006_payment_lifecycle.sql:/docker-entrypoint-initdb.d/070-payment-lifecycle.sql:ro
+      - ../../specs/v1/migrations/007_settlement_reconciliation_integrity.sql:/docker-entrypoint-initdb.d/080-settlement-reconciliation-integrity.sql:ro
+      - ../../specs/v1/migrations/008_reconciliation_multiple_settlements.sql:/docker-entrypoint-initdb.d/090-reconciliation-multiple-settlements.sql:ro
       - ../../specs/v1/migrations/009_payment_instrument_integrity.sql:/docker-entrypoint-initdb.d/100-payment-instrument-integrity.sql:ro
       - ../../specs/v1/migrations/010_batch2_audit_notification_security.sql:/docker-entrypoint-initdb.d/110-batch2-audit-notification-security.sql:ro
       - ../../specs/v1/migrations/011_authorization_evidence_integrity.sql:/docker-entrypoint-initdb.d/120-authorization-evidence-integrity.sql:ro
