@@ -1,5 +1,8 @@
 # Agent-Pay Full Project Review — 2026-09
 
+> **Superseded:** This review targeted commit `41e118cc53f6a7449cfbb3bd410e81adc545800d` and is historical. The identified schema/conformance gaps were subsequently closed across the Stage 4/Batch 2 work and V1 finalization. Use `docs/release/v1-final-2026-09.md` and the current `main` tree as the release baseline.
+
+
 ## Status
 
 Architecture review only. This document records the repository-wide consistency review before the Master Project Schema and V1 freeze.
