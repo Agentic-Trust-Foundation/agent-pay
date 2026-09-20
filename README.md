@@ -4,11 +4,11 @@ Agent-Pay is the financial control and payment layer for the agentic internet.
 
 ## V1 Status
 
-**Agent-Pay Protocol V1 and its reference implementation are frozen on `main` as the V1 baseline.**
+**Agent-Pay Protocol V1 and its reference implementation are FINAL and frozen on `main`.**
 
-V1 is a protocol + conformance + reference-implementation release. It is **not** a claim that a live PSP, bank, card issuer, regulatory environment, or production key-management deployment has been integrated.
+V1 is a protocol + conformance + reference-implementation release. It is **not** a claim that a live PSP, bank, card issuer, regulatory environment, HSM/vault, or production payment deployment has been integrated.
 
-Release scope and verification gates are recorded in `docs/release/v1-final-2026-09.md`.
+**Project memory and complete roadmap:** `docs/roadmap/v1-complete-and-v2-roadmap-2026-09.md`
 
 ## Core Principle
 
@@ -18,9 +18,11 @@ Release scope and verification gates are recorded in `docs/release/v1-final-2026
 
 ## Boundary with Agentic Trust Foundation
 
-Agentic Trust Foundation establishes identity, delegation, authorization, trust, capability, consent, revocation, provenance, and related evidence.
+ATF establishes identity, delegation, general authorization, trust, capabilities, consent, revocation, provenance, and authority evidence.
 
 Agent-Pay consumes that authority context and applies financial controls: policy, budget, approval, payment authentication, instrument routing, payment execution, transaction, settlement, reconciliation, and ledgering.
+
+**Agent-Pay never expands upstream authority.**
 
 ## Design Position
 
@@ -52,38 +54,61 @@ PostgreSQL + Transactional Outbox
 Provider / Payment Rail Adapters
 ```
 
-## Financial Control Model
-
-```text
-ATF Authority = Is the agent authorized to act?
-Policy        = Under what financial conditions may it spend?
-Budget        = How much allocated capacity remains?
-Approval      = Does this exact intent require human approval?
-Payment       = How is the financial operation executed?
-Transaction   = What economic operation occurred?
-Ledger        = What is the authoritative accounting record?
-```
-
-Passing one control never implies passing the others.
-
 ## V1 Assets
 
 - normative protocol and architecture documents;
 - OpenAPI V1 contract;
 - PostgreSQL schema plus ordered convergence migrations 001–011;
 - V1 JSON Schema / conformance vectors;
-- PostgreSQL-backed reference implementation;
+- PostgreSQL-backed reference implementation v1.0.0;
 - cryptographic ATF evidence verification adapter;
 - OIDC/JWT agent authentication boundary;
 - budget, approval, provider-operation, webhook, settlement, reconciliation and ledger integrity tests;
+- database enforcement requiring `VERIFIED` authority evidence;
 - Docker Compose clean-environment bootstrap;
-- GitHub Actions validation.
+- GitHub Actions validation and conformance.
+
+## V1 Completion Evidence
+
+Final Agent-Pay baseline commit:
+
+`d823e2924113f1ec6a64ad6223c8eac83ad67884`
+
+Verified at that baseline:
+
+- Validation — success
+- Conformance — success
+- Docker clean-start — success
+- persistence-table checks — success
+- worker-startup checks — success
+
+The migration-ordering issue encountered during clean-start was fixed by lexicographically ordered PostgreSQL migration mounts. The historical failure is not the current V1 state.
 
 ## V1 Boundary
 
 V1 intentionally does **not** freeze a universal ATF credential/token format. The reference implementation defines a JWT/JWKS verification profile as an adapter. Independent implementations may use another credential format as long as they produce the same normalized ATF authority semantics.
 
 V1 also does not include live PSP/bank integrations, production card issuance, universal dispute/chargeback operations, or jurisdiction-specific compliance certification.
+
+## Documentation Order
+
+Start here:
+
+1. `docs/roadmap/v1-complete-and-v2-roadmap-2026-09.md`
+2. `docs/release/v1-final-2026-09.md`
+3. `docs/architecture/v1-release-candidate-checklist-2026-09.md`
+4. `docs/architecture/agent-pay-integration-boundary.md`
+5. `docs/integration/atf-authorization-evidence-v1.md`
+6. `docs/protocol/api-v1.md` and `specs/v1/openapi.yaml`
+7. `specs/v1/migrations/`
+8. `conformance/v1/`
+9. `reference/implementation/`
+
+## Change Control
+
+Do not restart a full V1 review unless new evidence shows a regression, security defect, violated invariant, conformance failure, or intentional contract change.
+
+Future work should be classified as documentation clarification, implementation hardening, provider/deployment profile, optional extension/profile, or V2 semantic change.
 
 ## License
 
