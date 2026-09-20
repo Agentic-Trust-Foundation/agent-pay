@@ -80,7 +80,7 @@ def test_payment_requires_atf_authorization_evidence(monkeypatch):
     monkeypatch.setenv("AGENT_PAY_DEV_ACCOUNT_ID", "00000000-0000-0000-0000-000000000002")
     response = client.post(
         "/v1/payments",
-        headers={"Idempotency-Key": "missing-atf-evidence"},
+        headers={"Idempotency-Key": "missing-atf-evidence", "Authorization": "Bearer ci-agent-token"},
         json={
             "agent_id": "00000000-0000-0000-0000-000000000001",
             "account_id": "00000000-0000-0000-0000-000000000002",
