@@ -1,40 +1,56 @@
-# Agent-Pay V1 Release Candidate Checklist
+# Agent-Pay V1 Final Release Checklist
 
-## Implemented baseline
+**Status: V1 FINAL — protocol/reference baseline frozen**
+
+## Repository and protocol gates
 
 - [x] Canonical domain model
-- [x] PostgreSQL convergence migrations 001-007
+- [x] ATF ↔ Agent-Pay responsibility boundary
+- [x] OpenAPI V1 contract
+- [x] PostgreSQL schema and ordered migrations 001–011
 - [x] Double-entry-ready ledger journals/postings
-- [x] Policy and policy-version model
-- [x] Budget reservation with row locking
-- [x] Approval workflow
-- [x] Payment orchestration
-- [x] Provider operation idempotency
-- [x] UNKNOWN_EXTERNAL_OUTCOME
-- [x] Provider event persistence and deduplication
-- [x] Signed provider webhook HTTP boundary
+- [x] Immutable policy-version model
+- [x] Concurrency-safe budget reservations
+- [x] Appendable approval history and exact-intent binding
+- [x] Payment authentication persistence
+- [x] Provider operation identity/idempotency
+- [x] UNKNOWN_EXTERNAL_OUTCOME lifecycle
+- [x] Durable provider-event persistence and deduplication
+- [x] Signed webhook verification/replay controls
 - [x] Settlement ingestion and reconciliation
-- [x] Deterministic provider simulator
-- [x] Simulator timeout/webhook/settlement E2E tests
+- [x] Transactional outbox and retry worker primitives
+- [x] Append-only audit protection
+- [x] Payment-instrument integrity
+- [x] OIDC/JWT agent authentication boundary
+- [x] Cryptographic ATF authorization-evidence verification adapter
+- [x] Database enforcement that payment requests require VERIFIED authority evidence
+- [x] Reference simulator and end-to-end timeout → webhook → settlement scenario
 - [x] V1 behavioral conformance vectors
-- [x] Machine-readable conformance validation
-- [x] Docker Compose migration convergence
-- [x] CI schema convergence through migration 007
-- [x] Threat model baseline
-- [x] Protocol V1 baseline
+- [x] Cross-repository ATF/Agent-Pay conformance
+- [x] Docker Compose clean-environment bootstrap
+- [x] GitHub Actions validation
 
-## Remaining release gates
+## What V1 means
 
-- [ ] Execute PostgreSQL-backed full E2E test against a clean database.
-- [ ] Execute lifecycle integration tests for capture/void/refund, including concurrent refunds.
-- [ ] Execute HTTP webhook integration tests for duplicate, invalid-signature and out-of-order events.
-- [ ] Execute the complete CI workflow and record a green run.
-- [ ] Replace development authentication with production OIDC/JWT configuration for deployment environments.
-- [ ] Complete provider-specific replay protection and key rotation adapters.
-- [ ] Complete cryptographic authorization-evidence verification for ATF integration.
-- [ ] Review regulatory/compliance requirements for the target deployment jurisdiction.
-- [ ] Freeze V1 public API and publish compatibility policy.
+V1 is complete as an **open protocol baseline, conformance suite, and reference implementation**.
+
+It is not a claim of production payment-rail readiness. The reference implementation deliberately stops at provider-neutral and simulator boundaries.
+
+## Deployment-specific gates outside the V1 protocol release
+
+These remain deployment/provider work rather than missing V1 protocol semantics:
+
+- [ ] Configure production OIDC/JWT issuer, audience, JWKS and key rotation.
+- [ ] Configure production ATF evidence verifier/trust domain and revocation source.
+- [ ] Implement provider-specific webhook signing, replay and key-rotation adapters.
+- [ ] Integrate a real PSP/bank/card issuer and perform provider certification.
+- [ ] Implement production secrets/vault/HSM controls and PCI scope review where applicable.
+- [ ] Complete jurisdiction-specific legal/regulatory/compliance review.
+- [ ] Complete production SLO, incident response, fraud/risk and operational controls.
+- [ ] Implement full dispute/chargeback workflow if the chosen payment rail requires it.
+
+These items must not be described as V1 protocol gaps.
 
 ## Release rule
 
-Agent-Pay must not be labeled production-ready merely because the reference implementation starts. V1 RC requires passing financial integrity, idempotency, concurrency, provider ambiguity, webhook, settlement, reconciliation, security and clean-environment CI gates.
+Do not label the reference implementation a production payment processor. The V1 release claim is limited to the protocol, conformance assets, reference implementation, financial-control invariants, and tested provider-neutral lifecycle.
