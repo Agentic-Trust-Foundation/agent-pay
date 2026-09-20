@@ -147,6 +147,8 @@ def create_payment(
     if len(idempotency_key) > 255:
         raise HTTPException(status_code=400, detail="Idempotency-Key is too long")
     _authenticate_agent(authorization, request)
+    if request.authorization_evidence is None:
+        raise HTTPException(status_code=403, detail="verifiable ATF authorization evidence is required")
     fingerprint = request_fingerprint(request)
     deferred_error = None
 
