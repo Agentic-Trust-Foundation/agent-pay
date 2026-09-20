@@ -32,10 +32,15 @@ class AuthorizationContext:
                  action: str = "PAYMENT") -> None:
         if not self.evidence_id or not self.issuer:
             raise AuthorizationError("authorization evidence is incomplete")
+        if not self.agent_id or not self.account_id:
+            raise AuthorizationError("authorization identity is incomplete")
         if self.agent_id != agent_id or self.account_id != account_id:
             raise AuthorizationError("authorization subject/account mismatch")
-        if self.scope and action not in self.scope:
+        # An absent or empty scope is not an unrestricted grant.
+        if not self.scope or action not in self.scope:
             raise AuthorizationError("requested action is outside authorization scope")
+        if amount <= 0:
+            raise AuthorizationError("payment amount must be positive")
         if self.max_amount is not None and amount > self.max_amount:
             raise AuthorizationError("payment exceeds authorized amount")
         if self.currency is not None and self.currency.upper() != currency.upper():
