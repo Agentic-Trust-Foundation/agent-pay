@@ -240,6 +240,7 @@ components:
         metadata: {type: object, additionalProperties: true}
     AuthorizationEvidence:
       type: object
+      required: [evidence_id, issuer]
       properties:
         evidence_id: {type: string}
         issuer: {type: string}
@@ -322,7 +323,7 @@ components:
         unit_price: {$ref: '#/components/schemas/Money'}
     CreatePaymentRequest:
       type: object
-      required: [agent_id, account_id, amount, purpose]
+      required: [agent_id, account_id, amount, purpose, authorization_evidence]
       properties:
         agent_id: {type: string}
         account_id: {type: string}
