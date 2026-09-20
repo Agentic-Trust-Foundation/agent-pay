@@ -5,6 +5,7 @@ an ATF V1 authorization decision carried as a signed JWT using a configured JWKS
 issuer, and audience, then converts the verified claims into Agent-Pay's
 normalized AuthorizationContext.
 """
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import hashlib
 import os
@@ -107,7 +108,7 @@ def verify_signed_assertion(
         scope=scope,
         max_amount=max_amount,
         currency=evidence_currency,
-        valid_until=jwt.utils.datetime_from_timestamp(valid_until),
+        valid_until=datetime.fromtimestamp(valid_until, tz=timezone.utc),
         digest=hashlib.sha256(assertion.encode("utf-8")).hexdigest(),
         version=str(claims["version"]),
     )
