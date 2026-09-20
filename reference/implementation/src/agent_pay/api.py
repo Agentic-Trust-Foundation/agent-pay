@@ -225,8 +225,15 @@ def create_payment(
             )
             if evidence_id:
                 conn.execute(
-                    "UPDATE payment_requests SET authorization_evidence_id=%s WHERE id=%s",
-                    (evidence_id, request_id),
+                    """UPDATE payment_requests
+                       SET authorization_evidence_id=%s,
+                           authorization_context_hash=%s
+                     WHERE id=%s""",
+                    (evidence_id, auth.digest, request_id),
+                )
+                conn.execute(
+                    "UPDATE authorization_evidence SET payment_request_id=%s WHERE id=%s",
+                    (request_id, evidence_id),
                 )
             payment_id = repo.create_payment(request_id=request_id, amount=request.amount.value,
                                              currency=currency, status="POLICY_CHECK")
