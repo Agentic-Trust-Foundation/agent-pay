@@ -2,141 +2,50 @@
 
 ## Status
 
-Draft V1 contract. This document defines the initial resource and operation boundary; it is not yet a production payment specification.
+**Normative V1 machine-readable contract:** `specs/v1/openapi.yaml`.
 
-## Design Principles
-
-- Payment APIs are intent-oriented.
-- Agents submit payment intent; they do not select or receive raw financial credentials.
-- Financial operations require idempotency.
-- Authorization and spending controls are evaluated server-side.
-- Payment state is separate from transaction/ledger state.
-- Provider-specific details remain behind adapters.
+This document explains the contract; it does not override the OpenAPI file.
 
 ## Primary Operations
 
 ```text
-POST /v1/agents
-POST /v1/delegations
-POST /v1/wallets
-POST /v1/wallets/{walletId}/fund
-POST /v1/policies
 POST /v1/payments
-
 GET  /v1/payments/{paymentId}
 POST /v1/approvals/{approvalId}/approve
 POST /v1/approvals/{approvalId}/deny
-GET  /v1/transactions/{transactionId}
+POST /v1/payments/{paymentId}/capture
+POST /v1/payments/{paymentId}/void
+POST /v1/payments/{paymentId}/refund
+POST /v1/providers/{providerName}/webhooks
+POST /v1/providers/{providerName}/settlements
 ```
 
-## Payment Intent
+## Required payment controls
 
-The primary financial operation is:
+A payment request requires:
 
-```http
-POST /v1/payments
-Idempotency-Key: req_abc123
-```
+1. authenticated Agent-Pay caller;
+2. server-side binding of the authenticated principal to `agent_id` and `account_id`;
+3. cryptographically verified ATF authorization evidence;
+4. explicit `PAYMENT` authority, amount and currency bounds, validity and revocation status;
+5. Agent-Pay spending policy;
+6. budget reservation;
+7. human approval where policy requires it;
+8. provider idempotency and explicit ambiguous-outcome handling;
+9. transaction/ledger integrity and audit/outbox effects.
 
-The request identifies:
-
-- Agent
-- Account
-- Merchant
-- Amount
-- Currency
-- Purpose
-- Optional line items
-- Optional preferred instrument
-
-The response represents the state of the payment request. It does not imply that money has already moved.
-
-Example:
-
-```json
-{
-  "id": "pay_123",
-  "status": "APPROVAL_REQUIRED",
-  "agent_id": "agt_123",
-  "account_id": "acc_123",
-  "amount": "850.00",
-  "currency": "USD",
-  "approval_id": "apr_123"
-}
-```
+Authentication alone is never financial authority.
 
 ## Idempotency
 
-Every operation that can create or change financial state must support an idempotency key.
+Financially mutating operations use idempotency boundaries appropriate to the operation: API request, provider operation, transaction/ledger posting, approval decision, and provider event/settlement ingestion.
 
-For a repeated request with the same key and equivalent request payload, the server should return the original operation result rather than create a second financial effect.
+Reusing an API idempotency key with materially different intent is a conflict.
 
-Reusing an idempotency key with materially different request data must result in a conflict.
+## Error model
 
-## Authorization Sequence
-
-A payment request should be processed in this logical order:
-
-```text
-Authenticate
-    ↓
-Verify Agent
-    ↓
-Verify Delegation
-    ↓
-Evaluate Policy
-    ↓
-Evaluate Budget
-    ↓
-Evaluate Risk
-    ↓
-Evaluate Approval Requirement
-    ↓
-Route Payment
-    ↓
-Execute Payment
-    ↓
-Create Transaction
-    ↓
-Post Ledger Effects
-    ↓
-Emit Audit / Notification Events
-```
-
-## API vs Financial Truth
-
-The API response is not the ledger. A successful HTTP response means that the requested operation was accepted according to the endpoint contract; final financial state is represented by Payment, Transaction, and Ledger records.
-
-## Error Model
-
-Errors should be stable, machine-readable, and include a correlation ID where possible.
-
-Example:
-
-```json
-{
-  "code": "BUDGET_EXCEEDED",
-  "message": "Payment exceeds the available budget.",
-  "correlation_id": "corr_123"
-}
-```
-
-Initial error categories should include:
-
-- `INVALID_REQUEST`
-- `AUTHENTICATION_REQUIRED`
-- `DELEGATION_INVALID`
-- `POLICY_DENIED`
-- `BUDGET_EXCEEDED`
-- `APPROVAL_REQUIRED`
-- `PAYMENT_NOT_ALLOWED`
-- `INSUFFICIENT_FUNDS`
-- `PAYMENT_PROVIDER_ERROR`
-- `DUPLICATE_REQUEST`
-- `STATE_CONFLICT`
+HTTP errors use `application/problem+json` semantics. Implementations may add stable Agent-Pay error codes and correlation identifiers.
 
 ## Versioning
 
-V1 uses the `/v1` URL prefix. Breaking changes require a new API version. Additive changes should remain backward compatible wherever practical.
-
-The normative machine-readable API contract is maintained in `specs/v1/openapi.yaml`.
+V1 is exposed under `/v1`. Breaking API changes require a new major protocol/API version. Additive changes must remain backward compatible where practical.
