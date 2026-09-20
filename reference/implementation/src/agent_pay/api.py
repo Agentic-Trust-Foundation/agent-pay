@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from .auth import require_agent, resolve_approval_bearer, resolve_bearer
 from .authorization import AuthorizationContext, AuthorizationError
+from .atf_evidence import verify_signed_assertion
 from .control import ControlRepository
 from .db import connection
 from .lifecycle_api import capture, refund, void
@@ -22,7 +23,7 @@ from .repositories import PaymentRepository
 from .unit_of_work import UnitOfWork
 from .webhooks import provider_settlement, provider_webhook
 
-app = FastAPI(title="Agent-Pay Reference", version="0.5.0")
+app = FastAPI(title="Agent-Pay Reference", version="1.0.0")
 app.add_api_route("/v1/payments/{payment_id}/capture", capture, methods=["POST"], status_code=202, tags=["Payment Lifecycle"])
 app.add_api_route("/v1/payments/{payment_id}/void", void, methods=["POST"], status_code=202, tags=["Payment Lifecycle"])
 app.add_api_route("/v1/payments/{payment_id}/refund", refund, methods=["POST"], status_code=202, tags=["Payment Lifecycle"])
@@ -92,6 +93,7 @@ class AuthorizationEvidence(BaseModel):
     expires_at: str | None = None
     digest: str | None = None
     version: str | None = None
+    signed_assertion: str | None = None
 
 
 class CreatePayment(BaseModel):
@@ -172,18 +174,15 @@ def create_payment(
             evidence_id = None
             if request.authorization_evidence:
                 evidence = request.authorization_evidence
+                if not evidence.signed_assertion:
+                    raise HTTPException(status_code=403, detail="cryptographically signed ATF authorization evidence is required")
                 try:
-                    auth = AuthorizationContext(
-                        evidence_id=evidence.evidence_id,
-                        issuer=evidence.issuer,
-                        agent_id=str(request.agent_id),
-                        account_id=str(request.account_id),
-                        delegation_id=evidence.delegation_id,
-                        scope=frozenset(evidence.scope),
-                        max_amount=Decimal(evidence.max_amount) if evidence.max_amount is not None else None,
-                        currency=evidence.currency,
-                        digest=evidence.digest,
-                        version=evidence.version,
+                    auth = verify_signed_assertion(
+                        evidence.signed_assertion,
+                        expected_agent_id=str(request.agent_id),
+                        expected_account_id=str(request.account_id),
+                        amount=Decimal(request.amount.value),
+                        currency=currency,
                     )
                     auth.validate(
                         agent_id=str(request.agent_id),
@@ -191,17 +190,31 @@ def create_payment(
                         amount=Decimal(request.amount.value),
                         currency=currency,
                     )
+                    if evidence.evidence_id and evidence.evidence_id != auth.evidence_id:
+                        raise AuthorizationError("authorization evidence id does not match signed evidence")
+                    if evidence.version and evidence.version != auth.version:
+                        raise AuthorizationError("authorization evidence version does not match signed evidence")
+                    if evidence.issuer and evidence.issuer != auth.issuer:
+                        raise AuthorizationError("authorization evidence issuer does not match signed evidence")
                 except (AuthorizationError, ValueError) as exc:
                     raise HTTPException(status_code=403, detail=str(exc)) from exc
+                evidence_payload = evidence.model_dump(mode="json")
+                evidence_payload.update({
+                    "verified_evidence_id": auth.evidence_id,
+                    "verified_issuer": auth.issuer,
+                    "verified_version": auth.version,
+                    "verified_digest": auth.digest,
+                })
                 evidence_id = conn.execute(
                     """INSERT INTO authorization_evidence
                        (account_id, agent_id, issuer_reference, evidence_type,
-                        subject_reference, evidence, verification_status)
-                       VALUES (%s,%s,%s,%s,%s,%s::jsonb,'UNVERIFIED') RETURNING id""",
+                        subject_reference, audience, issued_at, expires_at, evidence,
+                        verification_status)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,'VERIFIED') RETURNING id""",
                     (
-                        request.account_id, request.agent_id, evidence.issuer,
-                        evidence.evidence_type, evidence.evidence_id,
-                        json.dumps(evidence.model_dump(mode="json")),
+                        request.account_id, request.agent_id, auth.issuer,
+                        evidence.evidence_type, auth.evidence_id, None, None,
+                        auth.valid_until, json.dumps(evidence_payload),
                     ),
                 ).fetchone()[0]
 
