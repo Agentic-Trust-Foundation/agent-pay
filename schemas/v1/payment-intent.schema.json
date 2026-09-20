@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentwallet.ir/schemas/v1/payment-intent.schema.json",
+  "$id": "https://agent-pay.dev/schemas/v1/payment-intent.schema.json",
   "title": "Agent-Pay V1 Payment Intent",
   "type": "object",
-  "required": ["agent_id", "account_id", "merchant", "amount", "purpose"],
+  "required": ["agent_id", "account_id", "merchant", "amount", "purpose", "authorization_evidence"],
   "properties": {
     "agent_id": {"type": "string", "minLength": 1},
     "account_id": {"type": "string", "minLength": 1},
@@ -47,6 +47,7 @@
     },
     "authorizationEvidence": {
       "type": "object",
+      "required": ["evidence_id", "issuer"],
       "properties": {
         "evidence_id": {"type": "string"},
         "issuer": {"type": "string"},
