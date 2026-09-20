@@ -4,6 +4,8 @@
 
 **Normative V1 machine-readable contract:** `specs/v1/openapi.yaml`.
 
+**V1 status:** FINAL and frozen. The project completion record and forward roadmap are maintained in `docs/roadmap/v1-complete-and-v2-roadmap-2026-09.md`.
+
 This document explains the contract; it does not override the OpenAPI file.
 
 ## Primary Operations
@@ -36,6 +38,18 @@ A payment request requires:
 
 Authentication alone is never financial authority.
 
+## V1 security/integrity binding
+
+The reference implementation additionally enforces that:
+
+- the payment request references the verified authorization evidence used for the decision;
+- the stored authorization context hash matches the verified evidence digest;
+- payment/request/evidence identity and amount/currency remain consistent at execution time;
+- PostgreSQL rejects payment requests bound to non-`VERIFIED` evidence;
+- terminal payment outcomes are handled idempotently and invalid state transitions are rejected.
+
+These are V1 integrity invariants, not optional application conventions.
+
 ## Idempotency
 
 Financially mutating operations use idempotency boundaries appropriate to the operation: API request, provider operation, transaction/ledger posting, approval decision, and provider event/settlement ingestion.
@@ -49,3 +63,7 @@ HTTP errors use `application/problem+json` semantics. Implementations may add st
 ## Versioning
 
 V1 is exposed under `/v1`. Breaking API changes require a new major protocol/API version. Additive changes must remain backward compatible where practical.
+
+## Change control
+
+Documentation, tests, examples, and non-breaking implementation hardening may evolve without changing the V1 contract. Changes to normative financial or authority semantics require an explicit V2 decision.
