@@ -30,10 +30,19 @@ def test_authorization_accepts_matching_payment():
     {"agent_id": "agent-1", "account_id": "other", "amount": Decimal("50"), "currency": "USD"},
     {"agent_id": "agent-1", "account_id": "account-1", "amount": Decimal("101"), "currency": "USD"},
     {"agent_id": "agent-1", "account_id": "account-1", "amount": Decimal("50"), "currency": "EUR"},
+    {"agent_id": "agent-1", "account_id": "account-1", "amount": Decimal("0"), "currency": "USD"},
+    {"agent_id": "agent-1", "account_id": "account-1", "amount": Decimal("-1"), "currency": "USD"},
 ])
 def test_authorization_fails_closed(kwargs):
     with pytest.raises(AuthorizationError):
         context().validate(**kwargs)
+
+
+def test_empty_scope_fails_closed():
+    with pytest.raises(AuthorizationError, match="scope"):
+        context(scope=frozenset()).validate(
+            agent_id="agent-1", account_id="account-1", amount=Decimal("1"), currency="USD"
+        )
 
 
 def test_expired_authorization_fails_closed():
