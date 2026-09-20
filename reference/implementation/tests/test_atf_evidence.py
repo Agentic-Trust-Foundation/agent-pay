@@ -1,4 +1,5 @@
 import time
+from decimal import Decimal
 
 import jwt
 import pytest
@@ -13,15 +14,18 @@ def _configure(monkeypatch):
     monkeypatch.setenv("AGENT_PAY_ATF_ISSUER", "https://atf.example/")
     monkeypatch.setenv("AGENT_PAY_ATF_AUDIENCE", "agent-pay")
 
+    public_key = key.public_key()
     class SigningKey:
-        key = key.public_key()
+        pass
+    signing_key = SigningKey()
+    signing_key.key = public_key
 
     class FakeJWKClient:
         def __init__(self, url):
             assert url == "https://atf.example/jwks.json"
 
         def get_signing_key_from_jwt(self, token):
-            return SigningKey()
+            return signing_key
 
     monkeypatch.setattr("agent_pay.atf_evidence.PyJWKClient", FakeJWKClient)
     return key
@@ -57,7 +61,7 @@ def test_valid_signed_evidence_is_verified(monkeypatch):
         _token(key),
         expected_agent_id="agent-1",
         expected_account_id="account-1",
-        amount=__import__("decimal").Decimal("75"),
+        amount=Decimal("75"),
         currency="USD",
     )
     assert context.evidence_id == "ev-1"
@@ -101,6 +105,6 @@ def test_missing_configuration_fails_closed(monkeypatch):
             "token",
             expected_agent_id="agent-1",
             expected_account_id="account-1",
-            amount=__import__("decimal").Decimal("1"),
+            amount=Decimal("1"),
             currency="USD",
         )
