@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Agent-Pay API
   version: 1.0.0
-  description: Financial control and payment API for AI agents. The API accepts financial intent; Agent-Pay evaluates authenticated agent identity, delegation, policy, budget, approval, authentication, and payment routing.
+  description: Financial control and payment API for AI agents. V1 requires authenticated caller binding and cryptographically verified ATF authorization evidence before financial execution. The exact ATF credential format is not frozen by the protocol; this reference implementation uses a configured verification adapter.
 servers:
   - url: https://api.example.invalid/v1
 security:
@@ -240,7 +240,7 @@ components:
         metadata: {type: object, additionalProperties: true}
     AuthorizationEvidence:
       type: object
-      required: [evidence_id, issuer]
+      required: [signed_assertion]
       properties:
         evidence_id: {type: string}
         issuer: {type: string}
@@ -249,6 +249,7 @@ components:
         issued_at: {type: string, format: date-time}
         expires_at: {type: string, format: date-time}
         source_reference: {type: string}
+        signed_assertion: {type: string, description: Reference implementation requires a cryptographically signed ATF authorization decision; exact token format remains an implementation profile.}
     CreateAgentRequest:
       type: object
       required: [account_id, name]
