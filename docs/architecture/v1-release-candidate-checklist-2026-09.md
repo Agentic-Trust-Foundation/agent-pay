@@ -2,6 +2,8 @@
 
 **Status: V1 FINAL — protocol/reference baseline frozen**
 
+> **Project memory / roadmap:** `docs/roadmap/v1-complete-and-v2-roadmap-2026-09.md`
+
 ## Repository and protocol gates
 
 - [x] Canonical domain model
@@ -24,6 +26,7 @@
 - [x] OIDC/JWT agent authentication boundary
 - [x] Cryptographic ATF authorization-evidence verification adapter
 - [x] Database enforcement that payment requests require VERIFIED authority evidence
+- [x] Execution-time payment/request/evidence binding and amount/currency checks
 - [x] Reference simulator and end-to-end timeout → webhook → settlement scenario
 - [x] V1 behavioral conformance vectors
 - [x] Cross-repository ATF/Agent-Pay conformance
@@ -35,6 +38,20 @@
 V1 is complete as an **open protocol baseline, conformance suite, and reference implementation**.
 
 It is not a claim of production payment-rail readiness. The reference implementation deliberately stops at provider-neutral and simulator boundaries.
+
+## Final V1 verification record
+
+Baseline commit:
+
+`d823e2924113f1ec6a64ad6223c8eac83ad67884`
+
+Verified green at this baseline:
+
+- Agent-Pay Validation
+- Agent-Pay Conformance
+- Docker Clean Start
+- persistence-table verification
+- worker-startup verification
 
 ## Deployment-specific gates outside the V1 protocol release
 
@@ -50,6 +67,10 @@ These remain deployment/provider work rather than missing V1 protocol semantics:
 - [ ] Implement full dispute/chargeback workflow if the chosen payment rail requires it.
 
 These items must not be described as V1 protocol gaps.
+
+## Historical failure note
+
+An earlier Docker clean-start run failed because PostgreSQL migration mount targets were not lexicographically ordered. The migration targets were corrected to zero-padded order and migrations 009–011 were included. A subsequent clean-start run passed all required checks.
 
 ## Release rule
 
