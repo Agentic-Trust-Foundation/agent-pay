@@ -1,3 +1,7 @@
+from decimal import Decimal
+
+import pytest
+
 from fastapi.testclient import TestClient
 
 from agent_pay.api import CreatePayment, app, request_fingerprint
@@ -66,3 +70,42 @@ def test_request_fingerprint_includes_control_selection():
     })
     changed = base.model_copy(update={"budget_id": "00000000-0000-0000-0000-000000000003"})
     assert request_fingerprint(base) != request_fingerprint(changed)
+
+
+
+def test_payment_requires_atf_authorization_evidence(monkeypatch):
+    monkeypatch.setenv("AGENT_PAY_AUTH_MODE", "development")
+    monkeypatch.setenv("AGENT_PAY_DEV_TOKEN", "ci-agent-token")
+    monkeypatch.setenv("AGENT_PAY_DEV_AGENT_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("AGENT_PAY_DEV_ACCOUNT_ID", "00000000-0000-0000-0000-000000000002")
+    response = client.post(
+        "/v1/payments",
+        headers={"Idempotency-Key": "missing-atf-evidence"},
+        json={
+            "agent_id": "00000000-0000-0000-0000-000000000001",
+            "account_id": "00000000-0000-0000-0000-000000000002",
+            "amount": {"value": "10.00", "currency": "USD"},
+            "purpose": "test",
+        },
+    )
+    assert response.status_code == 403
+    assert "authorization evidence" in response.json()["detail"]
+
+
+def test_authorization_evidence_scope_must_include_payment():
+    from agent_pay.authorization import AuthorizationContext, AuthorizationError
+
+    evidence = AuthorizationContext(
+        evidence_id="ev-1",
+        issuer="atf",
+        agent_id="agent-1",
+        account_id="account-1",
+        scope=frozenset({"BOOKING"}),
+    )
+    with pytest.raises(AuthorizationError, match="outside authorization scope"):
+        evidence.validate(
+            agent_id="agent-1",
+            account_id="account-1",
+            amount=Decimal("10"),
+            currency="USD",
+        )
