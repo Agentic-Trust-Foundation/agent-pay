@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-pay-reference"
-version = "0.5.0"
+version = "1.0.0"
 description = "Reference implementation for the Agent-Pay protocol"
 requires-python = ">=3.11"
 dependencies = [
