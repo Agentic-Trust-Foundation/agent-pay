@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 
-from agent_pay.provider_events import verify_hmac_signature
+from agent_pay.provider_events import sanitize_payload, verify_hmac_signature
 
 
 def test_provider_signature_verification():
@@ -10,9 +10,6 @@ def test_provider_signature_verification():
     signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
     assert verify_hmac_signature(payload, "sha256=" + signature, secret)
     assert not verify_hmac_signature(payload, "sha256=" + "0" * 64, secret)
-
-
-from agent_pay.provider_events import sanitize_payload
 
 
 def test_provider_payload_redacts_primary_credentials():
