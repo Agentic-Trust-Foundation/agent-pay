@@ -66,19 +66,18 @@ class SettlementRepository:
 
             settlement_id = inserted[0]
 
-            operation = self.conn.execute(
-                """SELECT po.id, po.status, po.provider_reference,
-                          p.amount, p.currency
+            operations = self.conn.execute(
+                """SELECT po.id, po.status, po.provider_reference, po.operation_type,
+                          po.request_payload, p.amount, p.currency
                    FROM provider_operations po
                    JOIN payments p ON p.id=po.payment_id
                    WHERE po.provider_reference=%s
                    ORDER BY po.created_at DESC
-                   LIMIT 1
                    FOR UPDATE""",
                 (provider_reference,),
-            ).fetchone()
+            ).fetchall()
 
-            if not operation:
+            if not operations:
                 self._record_reconciliation(
                     settlement_id=settlement_id,
                     provider_operation_id=None,
@@ -95,7 +94,27 @@ class SettlementRepository:
                 )
                 return "DISCREPANCY"
 
-            operation_id, operation_status, _, expected_amount, expected_currency = operation
+            if len(operations) > 1:
+                self._record_reconciliation(
+                    settlement_id=settlement_id,
+                    provider_operation_id=None,
+                    status="DISCREPANCY",
+                    expected_amount=None,
+                    observed_amount=observed_amount_d,
+                    expected_currency=None,
+                    observed_currency=observed_currency,
+                    discrepancy_code="AMBIGUOUS_PROVIDER_REFERENCE",
+                )
+                self.conn.execute(
+                    "UPDATE settlements SET status='DISCREPANCY' WHERE id=%s",
+                    (settlement_id,),
+                )
+                return "DISCREPANCY"
+
+            operation_id, operation_status, _, operation_type, request_payload, payment_amount, payment_currency = operations[0]
+            payload = request_payload if isinstance(request_payload, dict) else {}
+            expected_amount = payload.get("amount", payment_amount)
+            expected_currency = payload.get("currency", payment_currency)
             if operation_status != "SUCCEEDED":
                 status, code = "DISCREPANCY", "STATUS_MISMATCH"
             else:
@@ -105,7 +124,6 @@ class SettlementRepository:
                     expected_currency=expected_currency,
                     observed_currency=observed_currency,
                 )
-
             self._record_reconciliation(
                 settlement_id=settlement_id,
                 provider_operation_id=operation_id,
