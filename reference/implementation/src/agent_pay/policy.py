@@ -172,10 +172,8 @@ def _parse_time(value: Any) -> time:
 
 
 def _time_in_window(value: time, start: time | None, end: time | None) -> bool:
-    if start is None and end is None:
-        return True
     if start is None:
-        return value <= end
+        return end is None or value <= end
     if end is None:
         return value >= start
     if start <= end:
