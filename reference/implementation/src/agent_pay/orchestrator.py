@@ -89,6 +89,12 @@ class PaymentOrchestrator:
         if row[1] not in {"PROCESSING", "UNKNOWN_EXTERNAL_OUTCOME"}:
             raise ValueError("payment is not in an executable finalization state")
         if outcome == ProviderOutcome.UNKNOWN:
+            self.conn.execute(
+                """UPDATE provider_operations
+                   SET status='UNKNOWN'
+                 WHERE payment_id=%s AND operation_type='CHARGE'""",
+                (payment_id,),
+            )
             self.payments.update_status(payment_id, "UNKNOWN_EXTERNAL_OUTCOME", provider_reference)
             enqueue(self.conn, event_type="PaymentOutcomeUnknown", aggregate_type="payment",
                     aggregate_id=payment_id, payload={"reservation_id": str(reservation_id)},
@@ -96,6 +102,13 @@ class PaymentOrchestrator:
             return "UNKNOWN_EXTERNAL_OUTCOME"
 
         if outcome == ProviderOutcome.FAILED:
+            self.conn.execute(
+                """UPDATE provider_operations
+                   SET status='FAILED', provider_reference=COALESCE(%s, provider_reference),
+                       completed_at=now()
+                 WHERE payment_id=%s AND operation_type='CHARGE'""",
+                (provider_reference, payment_id),
+            )
             self.budgets.release(reservation_id)
             self.payments.update_status(payment_id, "FAILED", provider_reference)
             enqueue(self.conn, event_type="PaymentFailed", aggregate_type="payment",
@@ -103,6 +116,13 @@ class PaymentOrchestrator:
                     correlation_id=correlation_id)
             return "FAILED"
 
+        self.conn.execute(
+            """UPDATE provider_operations
+               SET status='SUCCEEDED', provider_reference=COALESCE(%s, provider_reference),
+                   completed_at=now()
+             WHERE payment_id=%s AND operation_type='CHARGE'""",
+            (provider_reference, payment_id),
+        )
         self.budgets.consume(reservation_id)
         post_journal(
             self.conn,
