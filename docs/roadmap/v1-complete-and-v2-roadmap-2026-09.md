@@ -228,4 +228,6 @@ ATF VERIFIED AUTHORITY
 
 ## 14. Current next action
 
-V1 is done. Select the next workstream from the V2 roadmap or from the deployment-specific profile list; do not recreate the V1 implementation from scratch.
+V1 is done. Phase 18 completed the final repository audit against the frozen baseline. The audited main commit is `31ffe43b191d13ee3690f11520177a23e2432162`, with Validation, Conformance, and Docker Clean Start green. See `docs/audit/phase-18-final-audit-2026-09.md` for the audit record.
+
+Select the next workstream from the V2 roadmap or from the deployment-specific profile list; do not recreate the V1 implementation from scratch.
