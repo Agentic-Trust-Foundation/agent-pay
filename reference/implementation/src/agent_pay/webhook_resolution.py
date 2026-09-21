@@ -1,8 +1,7 @@
 """Resolve signed provider events into durable payment outcomes."""
+import json
 from decimal import Decimal
 from uuid import UUID
-
-from .ledger import post_journal
 
 
 class ProviderEventResolver:
@@ -27,15 +26,15 @@ class ProviderEventResolver:
         correlation_id: str | None = None,
     ) -> str:
         event = self.conn.execute(
-                "SELECT processing_status, signature_valid FROM provider_events WHERE id=%s FOR UPDATE",
-                (event_id,),
-            ).fetchone()
-            if not event:
-                raise ValueError("provider event not found")
-            if not event[1]:
-                raise PermissionError("provider event signature is not valid")
-            if event[0] == "PROCESSED":
-                return "DUPLICATE"
+            "SELECT processing_status, signature_valid FROM provider_events WHERE id=%s FOR UPDATE",
+            (event_id,),
+        ).fetchone()
+        if not event:
+            raise ValueError("provider event not found")
+        if not event[1]:
+            raise PermissionError("provider event signature is not valid")
+        if event[0] == "PROCESSED":
+            return "DUPLICATE"
 
         row = self.conn.execute(
             """SELECT po.payment_id, po.operation_type, po.idempotency_key, po.request_payload,
@@ -110,7 +109,7 @@ class ProviderEventResolver:
             "UPDATE provider_events SET processing_status='PROCESSED', processed_at=now() WHERE id=%s",
             (event_id,),
         )
-        return resultED"
+        return result
 
     def _create_transaction(
         self,
