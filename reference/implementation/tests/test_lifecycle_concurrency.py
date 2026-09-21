@@ -78,15 +78,20 @@ def test_concurrent_refunds_never_exceed_captured_amount():
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(refund_once, amounts))
 
-    assert results.count("SUCCEEDED") + results.count("REFUNDED") == 1
+    successful_indexes = [
+        index for index, result in enumerate(results)
+        if result in ("SUCCEEDED", "REFUNDED")
+    ]
+    assert len(successful_indexes) == 1
     assert results.count("REJECTED") == 1
 
+    expected_refund = amounts[successful_indexes[0]]
     with connection() as conn:
         refunded = conn.execute(
             "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE payment_id=%s AND type='REFUND' AND status='POSTED'",
             (payment_id,),
         ).fetchone()[0]
-        assert Decimal(str(refunded)) == Decimal("60.00")
+        assert Decimal(str(refunded)) == expected_refund
 
 
 def test_concurrent_capture_and_void_are_mutually_exclusive():
