@@ -54,7 +54,7 @@ class ProviderOperationWorker:
             return None
 
         operation_id, payment_id, operation_type, idempotency_key, payload, request_id, payment_amount, payment_currency = operation
-        details = json.loads(payload or "{}")
+        details = payload if isinstance(payload, dict) else json.loads(payload or "{}")
         amount = Decimal(str(details.get("amount", payment_amount)))
         currency = str(details.get("currency", payment_currency)).strip().upper()
         customer = UUID(str(details["customer_ledger_account_id"])) if details.get("customer_ledger_account_id") else customer_ledger_account_id
