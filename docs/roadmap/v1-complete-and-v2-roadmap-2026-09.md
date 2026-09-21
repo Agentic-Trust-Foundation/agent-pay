@@ -161,7 +161,7 @@ Only the first four should normally land without reopening V1. V2 semantic chang
 
 ## 9. Post-V1 implementation hardening
 
-The V1 semantic contract remains frozen, but the reference implementation may continue non-breaking hardening. The cross-repository runtime gate has exposed a PostgreSQL compatibility defect in the reference implementation's locking query; it is being fixed as non-breaking implementation hardening. The V1 semantic contract remains frozen.
+The V1 semantic contract remains frozen, but the reference implementation may continue non-breaking hardening. The cross-repository runtime gate exposed and verified fixes for two PostgreSQL reference-runtime defects: locking through a nullable authorization-evidence join, and capture transaction persistence/idempotency handling. Both were resolved as non-breaking implementation hardening. The V1 semantic contract remains frozen.
 
 ## 10. Work that can proceed without changing V1
 
@@ -228,6 +228,6 @@ ATF VERIFIED AUTHORITY
 
 ## 14. Current next action
 
-V1 is done. Phase 18 completed the final repository audit against the frozen baseline. The audited V1 baseline is `eb2f06d6d3da5c14de269e3da92d068cb515ad65`, with Validation, Conformance, and Docker Clean Start green. Subsequent non-breaking runtime hardening is tracked separately. See `docs/audit/phase-18-final-audit-2026-09.md` for the audit record.
+V1 is done. Phase 18 completed the final repository audit against the frozen baseline. The audited V1 baseline is `eb2f06d6d3da5c14de269e3da92d068cb515ad65`, with Validation, Conformance, and Docker Clean Start green. Subsequent runtime hardening was merged in commits `461127ad6fbbf803e2619f6f9cac0ad24236ebed`, `c2311e0d5a9b2129c8e8e50915610bfec2b92cb8`, and `efcad467a1b3613024db2188125869635364ccf9`. The cross-repository Phase 1–6 runtime evidence is now green. See `docs/audit/phase-18-final-audit-2026-09.md` for the audit record.
 
 Select the next workstream from the V2 roadmap or from the deployment-specific profile list; do not recreate the V1 implementation from scratch.
