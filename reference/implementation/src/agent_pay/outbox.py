@@ -52,7 +52,7 @@ def claim_batch(conn, limit: int = 50):
     """
     return conn.execute(
         """UPDATE outbox_events
-           SET status='PROCESSING', attempts=attempts+1
+           SET status='PROCESSING', attempts=attempts+1, processing_at=now()
            WHERE id IN (
                SELECT id FROM outbox_events
                WHERE status='PENDING' AND available_at <= now()
@@ -69,7 +69,7 @@ def claim_batch(conn, limit: int = 50):
 def mark_published(conn, event_id: UUID) -> None:
     conn.execute(
         """UPDATE outbox_events
-           SET status='PUBLISHED', published_at=now()
+           SET status='PUBLISHED', published_at=now(), processing_at=NULL
            WHERE id=%s AND status='PROCESSING'""",
         (event_id,),
     )
@@ -84,7 +84,24 @@ def mark_failed(conn, event_id: UUID, *, retry_after_seconds: int = 30,
         """UPDATE outbox_events
            SET status='PENDING',
                available_at=now() + (%s * interval '1 second'),
-               last_error=%s
+               last_error=%s,
+               processing_at=NULL
            WHERE id=%s AND status='PROCESSING'""",
         (retry_after_seconds, error, event_id),
     )
+
+def recover_stale(conn, *, lease_seconds: int = 60, max_attempts: int = 5) -> int:
+    """Recover claims abandoned by a crashed worker."""
+    if lease_seconds < 1 or max_attempts < 1:
+        raise ValueError("lease_seconds and max_attempts must be positive")
+    rows = conn.execute(
+        """UPDATE outbox_events
+           SET status=CASE WHEN attempts >= %s THEN 'DEAD_LETTER' ELSE 'PENDING' END,
+               available_at=now(), processing_at=NULL,
+               last_error=COALESCE(last_error, 'worker lease expired')
+           WHERE status='PROCESSING'
+             AND processing_at < now() - (%s * interval '1 second')
+           RETURNING id""",
+        (max_attempts, lease_seconds),
+    ).fetchall()
+    return len(rows)
