@@ -66,8 +66,8 @@ class ProviderEventResolver:
         payload = request_payload if isinstance(request_payload, dict) else {}
         amount_d = Decimal(str(payload.get("amount", amount)))
         currency_u = str(payload.get("currency", currency)).strip().upper()
-        customer_id = payload.get("customer_ledger_account_id")
-        clearing_id = payload.get("clearing_ledger_account_id")
+        customer_id = payload.get("customer_ledger_account_id") or str(customer_ledger_account_id)
+        clearing_id = payload.get("clearing_ledger_account_id") or str(clearing_ledger_account_id)
 
         if operation_type == "CHARGE":
             if not reservation_id or not customer_id or not clearing_id:
