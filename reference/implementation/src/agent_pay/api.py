@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from psycopg.errors import UniqueViolation
 
 from .auth import require_agent, resolve_approval_bearer, resolve_bearer
-from .authorization import AuthorizationContext, AuthorizationError
+from .authorization import AuthorizationError
 from .atf_evidence import verify_signed_assertion
 from .control import ControlRepository
 from .db import connection
