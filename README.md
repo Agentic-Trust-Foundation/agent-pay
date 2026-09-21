@@ -113,4 +113,3 @@ Future work should be classified as documentation clarification, implementation 
 ## License
 
 Apache-2.0.
-\n## Ecosystem Projects\n\nAgent-Pay is part of a broader ecosystem:\n\n- **Agentic Trust Foundation (ATF)** — establishes identity, delegation, authorization, consent, and authority semantics.\n- **Agent Site Adapter** — public integration layer for websites and services.\n- **Agent-Pay Iran** — private product/deployment profile that applies Agent-Pay to the Iranian environment without forking the protocol.\n\nCross-project architecture and decisions are maintained separately in the private \`project-docs\` repository.\n
