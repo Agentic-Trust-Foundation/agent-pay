@@ -162,6 +162,18 @@ class ProviderOperationWorker:
 
         if outcome == ProviderOutcome.SUCCEEDED:
             if operation_type == "REFUND":
+                captured = self.conn.execute(
+                    """SELECT COALESCE(SUM(amount),0) FROM transactions
+                       WHERE payment_id=%s AND type='CAPTURE' AND status='POSTED'""",
+                    (payment_id,),
+                ).fetchone()[0]
+                refunded = self.conn.execute(
+                    """SELECT COALESCE(SUM(amount),0) FROM transactions
+                       WHERE payment_id=%s AND type='REFUND' AND status='POSTED'""",
+                    (payment_id,),
+                ).fetchone()[0]
+                if amount > Decimal(str(captured)) - Decimal(str(refunded)):
+                    raise ValueError("refund amount exceeds refundable captured amount")
                 tx_key = f"tx:{payment_id}:refund:{amount}:{currency}"
                 tx = self.conn.execute(
                     "SELECT id FROM transactions WHERE idempotency_key=%s FOR UPDATE",
@@ -227,6 +239,19 @@ class ProviderOperationWorker:
                 "UPDATE transactions SET status='FAILED' WHERE idempotency_key=%s",
                 (f"tx:{payment_id}:refund:{amount}:{currency}",),
             )
+
+        if operation_type == "REFUND" and outcome == ProviderOutcome.SUCCEEDED:
+            captured = self.conn.execute(
+                """SELECT COALESCE(SUM(amount),0) FROM transactions
+                   WHERE payment_id=%s AND type='CAPTURE' AND status='POSTED'""",
+                (payment_id,),
+            ).fetchone()[0]
+            refunded = self.conn.execute(
+                """SELECT COALESCE(SUM(amount),0) FROM transactions
+                   WHERE payment_id=%s AND type='REFUND' AND status='POSTED'""",
+                (payment_id,),
+            ).fetchone()[0]
+            payment_status = "REFUNDED" if Decimal(str(captured)) == Decimal(str(refunded)) else "SUCCEEDED"
 
         self.conn.execute(
             """UPDATE payments
