@@ -161,7 +161,7 @@ Only the first four should normally land without reopening V1. V2 semantic chang
 
 ## 9. Post-V1 implementation hardening
 
-The V1 semantic contract remains frozen, but the reference implementation may continue non-breaking hardening. The current cross-repository cycle is validating the durable payment lifecycle against PostgreSQL, including provider operation binding, provider outcomes, callback recovery, ledger/outbox behavior, capture, void, refund, and idempotent retries. CI evidence is required before this runtime gate is considered verified.
+The V1 semantic contract remains frozen, but the reference implementation may continue non-breaking hardening. The cross-repository runtime gate has exposed a PostgreSQL compatibility defect in the reference implementation's locking query; it is being fixed as non-breaking implementation hardening. The V1 semantic contract remains frozen.
 
 ## 10. Work that can proceed without changing V1
 
@@ -228,6 +228,6 @@ ATF VERIFIED AUTHORITY
 
 ## 14. Current next action
 
-V1 is done. Phase 18 completed the final repository audit against the frozen baseline. The audited main commit is `31ffe43b191d13ee3690f11520177a23e2432162`, with Validation, Conformance, and Docker Clean Start green. See `docs/audit/phase-18-final-audit-2026-09.md` for the audit record.
+V1 is done. Phase 18 completed the final repository audit against the frozen baseline. The audited V1 baseline is `eb2f06d6d3da5c14de269e3da92d068cb515ad65`, with Validation, Conformance, and Docker Clean Start green. Subsequent non-breaking runtime hardening is tracked separately. See `docs/audit/phase-18-final-audit-2026-09.md` for the audit record.
 
 Select the next workstream from the V2 roadmap or from the deployment-specific profile list; do not recreate the V1 implementation from scratch.

@@ -25,12 +25,13 @@ class PaymentOrchestrator:
         bound = self.conn.execute(
             """SELECT p.payment_request_id, p.status,
                       pr.account_id, pr.agent_id, pr.amount, pr.currency,
-                      pr.authorization_evidence_id, ae.verification_status
+                      pr.authorization_evidence_id,
+                      (SELECT ae.verification_status FROM authorization_evidence ae
+                       WHERE ae.id=pr.authorization_evidence_id) AS verification_status
                  FROM payments p
                  JOIN payment_requests pr ON pr.id=p.payment_request_id
-                 LEFT JOIN authorization_evidence ae ON ae.id=pr.authorization_evidence_id
                 WHERE p.id=%s AND pr.id=%s
-                FOR UPDATE OF p, pr""",
+                FOR UPDATE""",
             (payment_id, payment_request_id),
         ).fetchone()
         if not bound:
