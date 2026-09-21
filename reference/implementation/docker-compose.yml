@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: agent_pay
     ports:
-      - "5432:5432"
+      - "${AGENT_PAY_POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../../specs/v1/database-schema.sql:/docker-entrypoint-initdb.d/010-base-schema.sql:ro
