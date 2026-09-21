@@ -7,7 +7,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from .orchestrator import PaymentOrchestrator
-from .provider import PaymentProvider
+from .provider import PaymentProvider, ProviderOutcome
 from .unit_of_work import UnitOfWork
 
 
