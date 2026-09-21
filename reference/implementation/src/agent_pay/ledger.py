@@ -63,23 +63,59 @@ def post_journal(conn, *, currency: str, reference_type: str, reference_id: UUID
     if any(p["currency"] != currency for p in postings):
         raise ValueError("all postings must use the journal currency")
 
-    existing = conn.execute(
-        "SELECT id FROM ledger_journals WHERE idempotency_key = %s", (idempotency_key,)
-    ).fetchone()
-    if existing:
-        return existing[0]
-
-    journal_id = conn.execute(
+    inserted = conn.execute(
         """INSERT INTO ledger_journals
            (currency, reference_type, reference_id, idempotency_key, correlation_id)
-           VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+           VALUES (%s, %s, %s, %s, %s)
+           ON CONFLICT (idempotency_key) DO NOTHING
+           RETURNING id""",
         (currency, reference_type, reference_id, idempotency_key, correlation_id),
-    ).fetchone()[0]
-    for p in postings:
-        conn.execute(
-            """INSERT INTO ledger_postings
-               (journal_id, ledger_account_id, side, amount, currency)
-               VALUES (%s, %s, %s, %s, %s)""",
-            (journal_id, p["ledger_account_id"], p["side"], p["amount"], p["currency"]),
-        )
+    ).fetchone()
+
+    if inserted:
+        journal_id = inserted[0]
+        for p in postings:
+            conn.execute(
+                """INSERT INTO ledger_postings
+                   (journal_id, ledger_account_id, side, amount, currency)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (journal_id, p["ledger_account_id"], p["side"], p["amount"], p["currency"]),
+            )
+        return journal_id
+
+    existing = conn.execute(
+        """SELECT id, currency, reference_type, reference_id, correlation_id
+           FROM ledger_journals
+           WHERE idempotency_key=%s
+           FOR UPDATE""",
+        (idempotency_key,),
+    ).fetchone()
+    if not existing:
+        raise RuntimeError("ledger journal conflict could not be resolved")
+
+    journal_id, existing_currency, existing_reference_type, existing_reference_id, existing_correlation_id = existing
+    existing_postings = conn.execute(
+        """SELECT ledger_account_id, side, amount, currency
+           FROM ledger_postings
+           WHERE journal_id=%s
+           ORDER BY id""",
+        (journal_id,),
+    ).fetchall()
+    requested_postings = [
+        (str(p["ledger_account_id"]), p["side"], Decimal(str(p["amount"])), p["currency"])
+        for p in postings
+    ]
+    stored_postings = [
+        (str(account_id), side, Decimal(str(amount)), posting_currency)
+        for account_id, side, amount, posting_currency in existing_postings
+    ]
+
+    if (
+        existing_currency != currency
+        or existing_reference_type != reference_type
+        or existing_reference_id != reference_id
+        or existing_correlation_id != correlation_id
+        or stored_postings != requested_postings
+    ):
+        raise ValueError("ledger idempotency key conflict")
     return journal_id
