@@ -58,7 +58,7 @@ Provider / Payment Rail Adapters
 
 - normative protocol and architecture documents;
 - OpenAPI V1 contract;
-- PostgreSQL schema plus ordered convergence migrations 001–011;
+- PostgreSQL schema plus ordered convergence migrations 001–013;
 - V1 JSON Schema / conformance vectors;
 - PostgreSQL-backed reference implementation v1.0.0;
 - cryptographic ATF evidence verification adapter;
@@ -82,7 +82,7 @@ Verified at that baseline:
 - persistence-table checks — success
 - worker-startup checks — success
 
-The migration-ordering issue encountered during clean-start was fixed by lexicographically ordered PostgreSQL migration mounts. The historical failure is not the current V1 state.
+The migration-ordering issue encountered during clean-start was fixed by lexicographically ordered PostgreSQL migration mounts. The current clean-start profile applies migrations 001–013 in order.
 
 ## V1 Boundary
 
@@ -97,7 +97,7 @@ Start here:
 1. `docs/roadmap/v1-complete-and-v2-roadmap-2026-09.md`
 2. `docs/release/v1-final-2026-09.md`
 3. `docs/architecture/v1-release-candidate-checklist-2026-09.md`
-4. `docs/architecture/agent-pay-integration-boundary.md`
+4. `docs/architecture/project-boundaries.md`
 5. `docs/integration/atf-authorization-evidence-v1.md`
 6. `docs/protocol/api-v1.md` and `specs/v1/openapi.yaml`
 7. `specs/v1/migrations/`
