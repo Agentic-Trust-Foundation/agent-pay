@@ -54,5 +54,7 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/009_payment_instrument_integrity.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/010_batch2_audit_notification_security.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/011_authorization_evidence_integrity.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/012_outbox_worker_recovery.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/013_request_fingerprint.sql
       - name: Run reference tests
         run: pytest -q
