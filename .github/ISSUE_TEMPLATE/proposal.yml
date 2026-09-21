@@ -1,0 +1,52 @@
+name: Change proposal
+description: Propose a protocol, implementation, documentation, or governance change
+title: "Proposal: "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: class
+    attributes:
+      label: Change class
+      options:
+        - Documentation clarification
+        - Implementation hardening
+        - Provider/deployment profile
+        - Optional extension/profile
+        - V2 semantic change
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or goal
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed scope
+      description: Explain what is and is not included.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and contract impact
+      description: Explain V1/V2, API, persistence, conformance, and interoperability impact.
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security and financial-control impact
+      description: Identify authority, policy, payment, ledger, secret, or audit implications.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and acceptance criteria
+      description: Describe tests, vectors, interoperability evidence, or documentation needed.
+    validations:
+      required: true
