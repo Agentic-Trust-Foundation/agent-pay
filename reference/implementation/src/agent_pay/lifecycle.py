@@ -88,6 +88,12 @@ class PaymentLifecycle:
         if not row:
             raise ValueError("payment not found")
         if row[4] == "SUCCEEDED":
+            self._validate_operation_amount(
+                requested_amount=amount,
+                requested_currency=currency,
+                payment_amount=row[2],
+                payment_currency=row[3],
+            )
             return "SUCCEEDED"
         if row[4] != "AUTHORIZED":
             raise ValueError("payment is not authorized for capture")
@@ -133,6 +139,12 @@ class PaymentLifecycle:
         if not row:
             raise ValueError("payment not found")
         if row[4] == "VOIDED":
+            self._validate_operation_amount(
+                requested_amount=amount,
+                requested_currency=currency,
+                payment_amount=row[2],
+                payment_currency=row[3],
+            )
             return "VOIDED"
         if row[4] != "AUTHORIZED":
             raise ValueError("only an authorized payment can be voided")
@@ -174,15 +186,12 @@ class PaymentLifecycle:
             requested_currency=currency,
             payment_currency=locked[2],
         )
+        refund_transaction_key = f"tx:{payment_id}:refund:{amount}:{currency}"
         existing_refund = self.conn.execute(
             """SELECT status FROM transactions
                WHERE idempotency_key=%s""",
-            (f"tx:{payment_id}:refund:{amount}:{currency}",),
+            (refund_transaction_key,),
         ).fetchone()
-        if existing_refund and existing_refund[0] == "POSTED":
-            return "REFUNDED"
-        if existing_refund and existing_refund[0] == "FAILED":
-            return "REFUND_FAILED"
         captured = self.conn.execute(
             """SELECT COALESCE(SUM(amount),0) FROM transactions
                WHERE payment_id=%s AND type='CAPTURE' AND status='POSTED'""", (payment_id,)
@@ -191,7 +200,12 @@ class PaymentLifecycle:
             """SELECT COALESCE(SUM(amount),0) FROM transactions
                WHERE payment_id=%s AND type='REFUND' AND status='POSTED'""", (payment_id,)
         ).fetchone()[0]
-        if amount > Decimal(str(captured)) - Decimal(str(refunded)):
+        refundable = Decimal(str(captured)) - Decimal(str(refunded))
+        if existing_refund and existing_refund[0] == "POSTED":
+            return "REFUNDED" if refundable == 0 else "SUCCEEDED"
+        if existing_refund and existing_refund[0] == "FAILED":
+            return "REFUND_FAILED"
+        if amount > refundable:
             raise ValueError("refund amount exceeds refundable captured amount")
         self.payments.update_status(payment_id, "REFUND_PROCESSING")
         self._operation(payment_id, "REFUND", key)
