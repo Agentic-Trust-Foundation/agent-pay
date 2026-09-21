@@ -70,17 +70,22 @@ Provider / Payment Rail Adapters
 
 ## V1 Completion Evidence
 
-Final Agent-Pay baseline commit:
+Audited V1 baseline:
 
-`d823e2924113f1ec6a64ad6223c8eac83ad67884`
+`eb2f06d6d3da5c14de269e3da92d068cb515ad65`
 
-Verified at that baseline:
+Post-audit non-breaking runtime hardening was subsequently merged on `main`, with the latest documentation synchronization commit:
 
-- Validation — success
-- Conformance — success
-- Docker clean-start — success
-- persistence-table checks — success
-- worker-startup checks — success
+`c28cf698ff59d07623c99dac174ef8e75630efef`
+
+Verified in the post-audit cross-repository runtime gate:
+
+- durable payment lifecycle — success
+- outbox/worker reliability — success
+- provider contract runtime — success
+- Agent-Pay Iran runtime — success
+- ATF credential/revocation runtime — success
+- security/concurrency runtime — success
 
 The migration-ordering issue encountered during clean-start was fixed by lexicographically ordered PostgreSQL migration mounts. The current clean-start profile applies migrations 001–013 in order.
 
