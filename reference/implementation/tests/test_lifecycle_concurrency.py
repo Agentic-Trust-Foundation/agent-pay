@@ -84,7 +84,11 @@ def test_concurrent_refunds_never_exceed_captured_amount():
     with connection() as conn:
         provider = MockProvider(outcome=ProviderOutcome.SUCCEEDED)
         from agent_pay.provider_worker import ProviderOperationWorker
-        assert ProviderOperationWorker(conn, provider).run_once() == "SUCCEEDED"
+        operation_id = conn.execute(
+            "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+            (payment_id,),
+        ).fetchone()[0]
+        assert ProviderOperationWorker(conn, provider).run_once(operation_id=operation_id) == "SUCCEEDED"
         refunded = conn.execute(
             "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE payment_id=%s AND type='REFUND' AND status='POSTED'",
             (payment_id,),
@@ -156,7 +160,12 @@ def test_concurrent_capture_and_void_are_mutually_exclusive():
     with connection() as conn:
         provider = MockProvider(outcome=ProviderOutcome.SUCCEEDED)
         from agent_pay.provider_worker import ProviderOperationWorker
+        operation_id = conn.execute(
+            "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+            (payment_id,),
+        ).fetchone()[0]
         assert ProviderOperationWorker(conn, provider).run_once(
+            operation_id=operation_id,
             customer_ledger_account_id=customer,
             clearing_ledger_account_id=clearing,
         ) in {"SUCCEEDED", "VOIDED"}
