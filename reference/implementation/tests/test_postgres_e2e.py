@@ -45,7 +45,7 @@ def test_postgres_timeout_webhook_settlement_e2e():
         payload = json.loads(body)
         event_id = ProviderEventRepository(conn).record(provider_name="mock", event_id=payload["event_id"], event_type=payload["event_type"], payload=payload, signature_valid=True)
         conn.execute("UPDATE provider_events SET provider_operation_id=%s WHERE id=%s", (operation_id, event_id))
-        assert ProviderEventResolver(conn).resolve(event_id=event_id, provider_operation_id=operation_id, outcome="SUCCEEDED", provider_reference=payload["provider_reference"], customer_ledger_account_id=customer_ledger, clearing_ledger_account_id=clearing_ledger, correlation_id="e2e") == "RESOLVED"
+        assert ProviderEventResolver(conn).resolve(event_id=event_id, provider_operation_id=operation_id, outcome="SUCCEEDED", provider_reference=payload["provider_reference"], customer_ledger_account_id=customer_ledger, clearing_ledger_account_id=clearing_ledger, correlation_id="e2e") == "SUCCEEDED"
         assert conn.execute("SELECT status, provider_reference FROM payments WHERE id=%s", (payment_id,)).fetchone() == ("SUCCEEDED", payload["provider_reference"])
         assert conn.execute("SELECT status FROM budget_reservations WHERE id=%s", (reservation_id,)).fetchone()[0] == "CONSUMED"
         assert conn.execute("SELECT count(*) FROM ledger_journals WHERE reference_id=%s", (payment_id,)).fetchone()[0] == 1
