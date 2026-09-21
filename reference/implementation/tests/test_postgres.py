@@ -145,13 +145,13 @@ def test_database_rejects_unbalanced_ledger_journal_at_commit():
         pytest.skip("DATABASE_URL is required for PostgreSQL integration tests")
 
     with connection() as conn:
-        debit = conn.execute(
-            """INSERT INTO ledger_accounts (currency, account_type, name)
-               VALUES ('USD', 'CUSTOMER', %s) RETURNING id""",
-            (f"trigger-debit-{uuid4()}",),
-        ).fetchone()[0]
         with pytest.raises(Exception, match="ledger journal .* is not balanced"):
             with conn.transaction():
+                debit = conn.execute(
+                    """INSERT INTO ledger_accounts (currency, account_type, name)
+                       VALUES ('USD', 'CUSTOMER', %s) RETURNING id""",
+                    (f"trigger-debit-{uuid4()}",),
+                ).fetchone()[0]
                 journal_id = conn.execute(
                     """INSERT INTO ledger_journals
                        (currency, reference_type, idempotency_key)
