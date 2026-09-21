@@ -26,7 +26,8 @@ def _secret_for(provider_name: str) -> str:
     key = "AGENT_PAY_PROVIDER_WEBHOOK_SECRET_" + "".join(
         c if c.isalnum() else "_" for c in provider_name.upper()
     )
-    return os.getenv(key) or os.getenv("AGENT_PAY_PROVIDER_WEBHOOK_SECRET", "")
+    secret = os.getenv(key) or os.getenv("AGENT_PAY_PROVIDER_WEBHOOK_SECRET")
+    return secret or ""
 
 
 def _enforce_replay_window(payload: dict) -> None:
