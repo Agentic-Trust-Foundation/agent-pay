@@ -151,12 +151,12 @@ def test_refund_uses_persisted_partial_amount_and_finishes_in_worker():
                 customer_ledger_account_id=customer,
                 clearing_ledger_account_id=clearing,
             ) == "REFUND_PROCESSING"
+            operation_id = conn.execute(
+                "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+                (payment,),
+            ).fetchone()[0]
 
         provider = TransactionAwareProvider(conn)
-        operation_id = conn.execute(
-            "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
-            (payment,),
-        ).fetchone()[0]
         assert ProviderOperationWorker(conn, provider).run_once(operation_id=operation_id) == "SUCCEEDED"
         assert provider.calls == 1
 
@@ -184,13 +184,13 @@ def test_unknown_outcome_can_be_explicitly_retried_with_same_idempotency_key():
                 customer_ledger_account_id=customer,
                 clearing_ledger_account_id=clearing,
             ) == "PROCESSING"
+            operation_id = conn.execute(
+                "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+                (payment,),
+            ).fetchone()[0]
 
         unknown_provider = TransactionAwareProvider(conn, ProviderOutcome.UNKNOWN)
         worker = ProviderOperationWorker(conn, unknown_provider)
-        operation_id = conn.execute(
-            "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
-            (payment,),
-        ).fetchone()[0]
         assert worker.run_once(
             operation_id=operation_id,
             customer_ledger_account_id=customer,
