@@ -53,7 +53,12 @@ class PaymentOrchestrator:
             (reservation_id, payment_request_id),
         )
         self.payments.update_status(payment_id, "PROCESSING")
-        enqueue(self.conn, event_type="PaymentStarted", aggregate_type="payment",
+        self.payments.create_provider_operation(
+            payment_id,
+            "CHARGE",
+            f"payment:{payment_id}:charge",
+        )
+        enqueue(self.conn, event_type="PaymentStarted",
                 aggregate_id=payment_id, payload={"reservation_id": str(reservation_id)},
                 correlation_id=correlation_id)
         return reservation_id
