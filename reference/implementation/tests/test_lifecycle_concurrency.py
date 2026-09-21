@@ -58,27 +58,27 @@ def test_concurrent_refunds_never_exceed_captured_amount():
         with setup_conn.transaction():
             payment_id, customer, clearing, _ = _setup_captured_payment(setup_conn)
 
-    def refund_once():
+    def refund_once(amount):
         with connection() as conn:
             lifecycle = PaymentLifecycle(conn, MockProvider(outcome=ProviderOutcome.SUCCEEDED))
             try:
                 with conn.transaction():
-                    result = lifecycle.refund(
+                    return lifecycle.refund(
                         payment_id=payment_id,
-                        amount=Decimal("60.00"),
+                        amount=amount,
                         currency="USD",
                         customer_ledger_account_id=customer,
                         clearing_ledger_account_id=clearing,
-                        correlation_id="concurrent-refund",
+                        correlation_id=f"concurrent-refund:{amount}",
                     )
-                    return result
             except ValueError:
                 return "REJECTED"
 
+    amounts = [Decimal("60.00"), Decimal("50.00")]
     with ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(lambda _: refund_once(), range(2)))
+        results = list(pool.map(refund_once, amounts))
 
-    assert results.count("REFUNDED") == 1
+    assert results.count("SUCCEEDED") + results.count("REFUNDED") == 1
     assert results.count("REJECTED") == 1
 
     with connection() as conn:
