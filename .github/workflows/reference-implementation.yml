@@ -56,5 +56,17 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/011_authorization_evidence_integrity.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/012_outbox_worker_recovery.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/013_request_fingerprint.sql
+      - name: Run Ruff lint
+        run: ruff check src tests
+
+      - name: Check Ruff formatting
+        run: ruff format --check src tests
+
+      - name: Run mypy
+        run: mypy src
+
+      - name: Audit Python dependencies
+        run: pip-audit
+
       - name: Run reference tests
         run: pytest -q
