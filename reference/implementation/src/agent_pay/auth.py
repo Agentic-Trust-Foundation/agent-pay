@@ -44,7 +44,7 @@ def _oidc_principal(token: str) -> Principal:
             issuer=issuer,
             options={"require": ["exp", "iat", "sub", "iss", "aud"]},
         )
-    except (jwt.PyJWTError, Exception) as exc:
+    except Exception as exc:
         # Do not leak key-fetch, parsing, or token-validation details to callers.
         raise PermissionError("invalid OIDC bearer token") from exc
 
