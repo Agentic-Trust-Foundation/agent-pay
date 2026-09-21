@@ -43,6 +43,14 @@ class PaymentLifecycle:
         return amount, currency
 
     @staticmethod
+    def _refund_replay_status(*, transaction_status: str, refundable_amount: Decimal) -> str | None:
+        if transaction_status == "POSTED":
+            return "REFUNDED" if refundable_amount == 0 else "SUCCEEDED"
+        if transaction_status == "FAILED":
+            return "REFUND_FAILED"
+        return None
+
+    @staticmethod
     def _validate_refund_amount(
         *,
         requested_amount: Decimal,
@@ -201,10 +209,13 @@ class PaymentLifecycle:
                WHERE payment_id=%s AND type='REFUND' AND status='POSTED'""", (payment_id,)
         ).fetchone()[0]
         refundable = Decimal(str(captured)) - Decimal(str(refunded))
-        if existing_refund and existing_refund[0] == "POSTED":
-            return "REFUNDED" if refundable == 0 else "SUCCEEDED"
-        if existing_refund and existing_refund[0] == "FAILED":
-            return "REFUND_FAILED"
+        if existing_refund:
+            replay_status = self._refund_replay_status(
+                transaction_status=existing_refund[0],
+                refundable_amount=refundable,
+            )
+            if replay_status:
+                return replay_status
         if amount > refundable:
             raise ValueError("refund amount exceeds refundable captured amount")
         self.payments.update_status(payment_id, "REFUND_PROCESSING")
