@@ -11,7 +11,7 @@ def test_production_mode_fails_closed_without_oidc_configuration(monkeypatch):
     monkeypatch.setenv("AGENT_PAY_AUTH_MODE", "oidc")
     for key in ("AGENT_PAY_OIDC_JWKS_URL", "AGENT_PAY_OIDC_ISSUER", "AGENT_PAY_OIDC_AUDIENCE"):
         monkeypatch.delenv(key, raising=False)
-    with pytest.raises(PermissionError, match="not fully configured"):
+    with pytest.raises(PermissionError, match="is not configured"):
         resolve_bearer("token")
 
 

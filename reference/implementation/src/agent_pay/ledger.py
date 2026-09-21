@@ -106,9 +106,15 @@ def post_journal(conn, *, currency: str, reference_type: str, reference_id: UUID
         for p in postings
     ]
     stored_postings = [
-        (str(account_id), side, Decimal(str(amount)), posting_currency)
+        (str(account_id), str(side), Decimal(str(amount)), str(posting_currency))
         for account_id, side, amount, posting_currency in existing_postings
     ]
+    requested_postings = [
+        (str(account_id), str(side), Decimal(str(amount)), str(posting_currency))
+        for account_id, side, amount, posting_currency in requested_postings
+    ]
+    stored_postings.sort()
+    requested_postings.sort()
 
     if (
         existing_currency != currency

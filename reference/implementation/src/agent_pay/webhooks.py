@@ -30,14 +30,40 @@ def _secret_for(provider_name: str) -> str:
     return secret or ""
 
 
+async def _read_bounded_body(request: Request) -> bytes:
+    """Read request body with a hard cap, including chunked requests."""
+    raw_limit = os.getenv("AGENT_PAY_WEBHOOK_MAX_BODY_BYTES", "1048576")
+    try:
+        limit = int(raw_limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail="invalid webhook body-limit configuration") from exc
+    if limit <= 0:
+        raise HTTPException(status_code=500, detail="invalid webhook body-limit configuration")
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > limit:
+                raise HTTPException(status_code=413, detail="webhook payload is too large")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid Content-Length") from exc
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > limit:
+            raise HTTPException(status_code=413, detail="webhook payload is too large")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _enforce_replay_window(payload: dict) -> None:
-    raw_window = os.getenv("AGENT_PAY_WEBHOOK_REPLAY_WINDOW_SECONDS", "0")
+    raw_window = os.getenv("AGENT_PAY_WEBHOOK_REPLAY_WINDOW_SECONDS", "300")
     try:
         window = int(raw_window)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail="invalid webhook replay-window configuration") from exc
     if window <= 0:
-        return
+        raise HTTPException(status_code=500, detail="webhook replay window must be positive")
     occurred_at = payload.get("occurred_at") or payload.get("timestamp")
     if not isinstance(occurred_at, str):
         raise HTTPException(status_code=400, detail="provider timestamp is required")
@@ -52,7 +78,7 @@ def _enforce_replay_window(payload: dict) -> None:
         raise HTTPException(status_code=400, detail="provider event is outside replay window")
 
 
-def _ledger_accounts(conn, payment_id: UUID):
+def _ledger_accounts(conn, payment_id: UUID, provider_name: str):
     row = conn.execute(
         """SELECT la.id,
                   (SELECT ppa.ledger_account_id
@@ -67,7 +93,7 @@ def _ledger_accounts(conn, payment_id: UUID):
              JOIN ledger_accounts la ON la.wallet_id=w.id
             WHERE p.id=%s
             LIMIT 1""",
-        ("mock", payment_id),
+        (provider_name, payment_id),
     ).fetchone()
     if not row or not row[0] or not row[1]:
         raise HTTPException(status_code=409, detail="ledger accounts are not configured")
@@ -81,13 +107,13 @@ async def provider_webhook(
     x_provider_signature: str | None = Header(default=None, alias="X-Provider-Signature"),
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-ID"),
 ):
-    body = await request.body()
+    body = await _read_bounded_body(request)
     secret = _secret_for(provider_name)
     if not secret or not x_provider_signature or not verify_hmac_signature(body, x_provider_signature, secret):
         raise HTTPException(status_code=401, detail="invalid provider signature")
     try:
         payload = json.loads(body)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail="invalid JSON payload") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="provider payload must be an object")
@@ -95,7 +121,7 @@ async def provider_webhook(
     event_id = payload.get("event_id")
     event_type = payload.get("event_type")
     provider_reference = payload.get("provider_reference")
-    if not isinstance(event_id, str) or not isinstance(event_type, str):
+    if not isinstance(event_id, str) or not event_id or not isinstance(event_type, str) or not event_type:
         raise HTTPException(status_code=400, detail="event_id and event_type are required")
 
     outcome_map = {"payment.succeeded": "SUCCEEDED", "payment.failed": "FAILED"}
@@ -116,22 +142,26 @@ async def provider_webhook(
                 raise HTTPException(status_code=400, detail="provider_reference is required for financial events")
             operation = conn.execute(
                 """SELECT id, payment_id FROM provider_operations
-                   WHERE provider_reference=%s ORDER BY created_at DESC LIMIT 1 FOR UPDATE""",
-                (provider_reference,),
-            ).fetchone()
+                   WHERE provider_name=%s AND provider_reference=%s
+                   ORDER BY created_at DESC LIMIT 2 FOR UPDATE""",
+                (provider_name, provider_reference),
+            ).fetchall()
             if not operation:
                 raise HTTPException(status_code=404, detail="provider operation not found")
+            if len(operation) != 1:
+                raise HTTPException(status_code=409, detail="provider reference is ambiguous")
+            operation_id, payment_id = operation[0]
             conn.execute(
                 "UPDATE provider_events SET provider_operation_id=%s WHERE id=%s",
-                (operation[0], event_db_id),
+                (operation_id, event_db_id),
             )
-            customer_account, clearing_account = _ledger_accounts(conn, UUID(str(operation[1])))
+            customer_account, clearing_account = _ledger_accounts(conn, UUID(str(payment_id)), provider_name)
             result = ProviderEventResolver(conn).resolve(
-                event_id=event_db_id, provider_operation_id=operation[0], outcome=outcome,
+                event_id=event_db_id, provider_operation_id=operation_id, outcome=outcome,
                 provider_reference=provider_reference, customer_ledger_account_id=customer_account,
                 clearing_ledger_account_id=clearing_account, correlation_id=x_correlation_id,
             )
-            return {"status": result, "event_id": event_id, "payment_id": str(operation[1])}
+            return {"status": result, "event_id": event_id, "payment_id": str(payment_id)}
 
 
 @router.post("/v1/providers/{provider_name}/settlements")
@@ -140,14 +170,16 @@ async def provider_settlement(
     request: Request,
     x_provider_signature: str | None = Header(default=None, alias="X-Provider-Signature"),
 ):
-    body = await request.body()
+    body = await _read_bounded_body(request)
     secret = _secret_for(provider_name)
     if not secret or not x_provider_signature or not verify_hmac_signature(body, x_provider_signature, secret):
         raise HTTPException(status_code=401, detail="invalid provider signature")
     try:
         payload = json.loads(body)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail="invalid JSON payload") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="provider payload must be an object")
     required = ("settlement_reference", "provider_reference", "amount", "currency")
     if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
         raise HTTPException(status_code=400, detail="settlement_reference, provider_reference, amount and currency are required")
