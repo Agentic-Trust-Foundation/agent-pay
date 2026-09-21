@@ -79,6 +79,12 @@ class PaymentRepository:
                RETURNING id""",
             (payment_id, operation_type, idempotency_key),
         ).fetchone()
+        self.conn.execute(
+            """UPDATE payments
+               SET provider_operation_id=%s, updated_at=now()
+               WHERE id=%s""",
+            (row[0], payment_id),
+        )
         return row[0]
 
 
