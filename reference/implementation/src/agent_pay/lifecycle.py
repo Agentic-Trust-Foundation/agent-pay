@@ -124,7 +124,7 @@ class PaymentLifecycle:
         ).fetchone()
         if not locked:
             raise ValueError("payment not found")
-        if locked[0] not in ("SUCCEEDED", "REFUND_FAILED"):
+        if locked[0] not in ("SUCCEEDED", "REFUND_FAILED", "REFUNDED"):
             raise ValueError("only a captured payment can be refunded")
         captured = self.conn.execute(
             """SELECT COALESCE(SUM(amount),0) FROM transactions
@@ -159,5 +159,11 @@ class PaymentLifecycle:
                 {"ledger_account_id": customer_ledger_account_id, "side": "CREDIT", "amount": str(amount_d), "currency": currency},
             ],
         )
-        self.payments.update_status(payment_id, "REFUNDED")
+        remaining = Decimal(str(captured)) - (
+            Decimal(str(refunded)) + amount_d
+        )
+        self.payments.update_status(
+            payment_id,
+            "REFUNDED" if remaining == 0 else "SUCCEEDED",
+        )
         return "REFUNDED"
