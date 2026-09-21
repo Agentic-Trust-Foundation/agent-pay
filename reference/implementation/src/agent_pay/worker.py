@@ -36,9 +36,6 @@ def process_one(*, conn, payment_id: UUID, provider: PaymentProvider,
         )
         orchestrator.payments.update_status(payment_id, "PROCESSING")
 
-    # Recover a durable provider outcome before attempting any external call.
-    # This is the crash-recovery path: a worker may have completed provider
-    # execution but died before finalization.
     durable = conn.execute(
         """SELECT status, provider_reference
            FROM provider_operations
@@ -57,14 +54,14 @@ def process_one(*, conn, payment_id: UUID, provider: PaymentProvider,
         outcome = durable_outcome
         provider_reference = durable[1]
     else:
-        # The provider call happens after the reservation transaction commits.
         outcome = provider.charge(
             str(payment_id),
             int(amount * Decimal("100")),
             currency,
             f"payment:{payment_id}:charge",
         )
-        provider_reference = None
+        reference_getter = getattr(provider, "reference_for", None)
+        provider_reference = reference_getter(f"payment:{payment_id}:charge") if reference_getter else None
 
     with UnitOfWork(conn):
         orchestrator = PaymentOrchestrator(conn, provider)
