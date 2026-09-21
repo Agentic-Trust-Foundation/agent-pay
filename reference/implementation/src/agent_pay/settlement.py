@@ -111,7 +111,7 @@ class SettlementRepository:
                 )
                 return "DISCREPANCY"
 
-            operation_id, operation_status, _, operation_type, request_payload, payment_amount, payment_currency = operations[0]
+            operation_id, operation_status, _, _operation_type, request_payload, payment_amount, payment_currency = operations[0]
             payload = request_payload if isinstance(request_payload, dict) else {}
             expected_amount = payload.get("amount", payment_amount)
             expected_currency = payload.get("currency", payment_currency)
