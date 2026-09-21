@@ -2,7 +2,6 @@
 
 import base64
 import json
-import os
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -24,18 +23,10 @@ def load_local(path: Path):
 
 
 def load_atf():
-    token = os.environ.get("ATF_REPO_TOKEN")
-    if not token:
-        raise SystemExit(
-            "ATF_REPO_TOKEN is required to read the private agentic-trust "
-            "conformance vector from GitHub."
-        )
-
     request = Request(
         ATF_API_URL,
         headers={
             "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "agent-pay-cross-repo-conformance",
         },
@@ -46,12 +37,12 @@ def load_atf():
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         raise SystemExit(
-            f"Unable to read private ATF conformance vector from GitHub "
-            f"(HTTP {exc.code}). Check ATF_REPO_TOKEN permissions."
+            f"Unable to read ATF conformance vector from GitHub "
+            f"(HTTP {exc.code})."
         ) from exc
     except URLError as exc:
         raise SystemExit(
-            f"Unable to reach GitHub while reading the private ATF "
+            f"Unable to reach GitHub while reading the ATF "
             f"conformance vector: {exc.reason}"
         ) from exc
 
