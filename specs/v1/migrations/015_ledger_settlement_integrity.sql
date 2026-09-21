@@ -47,7 +47,11 @@ DECLARE
     credit_total NUMERIC(20,4);
     journal_currency CHAR(3);
 BEGIN
-    target_journal := COALESCE(NEW.journal_id, OLD.journal_id, NEW.id, OLD.id);
+    IF TG_TABLE_NAME = 'ledger_journals' THEN
+        target_journal := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+    ELSE
+        target_journal := CASE WHEN TG_OP = 'DELETE' THEN OLD.journal_id ELSE NEW.journal_id END;
+    END IF;
 
     SELECT currency
       INTO journal_currency
@@ -78,7 +82,10 @@ BEGIN
         RAISE EXCEPTION 'ledger journal % contains a currency mismatch', target_journal;
     END IF;
 
-    RETURN COALESCE(NEW, OLD);
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
 END;
 $$;
 
