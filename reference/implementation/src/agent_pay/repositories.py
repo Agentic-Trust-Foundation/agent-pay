@@ -72,20 +72,37 @@ class PaymentRepository:
         ).fetchall()
 
     def create_provider_operation(self, payment_id: UUID, operation_type: str, idempotency_key: str) -> UUID:
-        row = self.conn.execute(
+        inserted = self.conn.execute(
             """INSERT INTO provider_operations (payment_id, operation_type, idempotency_key)
                VALUES (%s,%s,%s)
-               ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
+               ON CONFLICT (idempotency_key) DO NOTHING
                RETURNING id""",
             (payment_id, operation_type, idempotency_key),
         ).fetchone()
+
+        if inserted:
+            operation_id = inserted[0]
+        else:
+            existing = self.conn.execute(
+                """SELECT id, payment_id, operation_type
+                   FROM provider_operations
+                   WHERE idempotency_key=%s
+                   FOR UPDATE""",
+                (idempotency_key,),
+            ).fetchone()
+            if not existing:
+                raise ValueError("provider operation idempotency race lost")
+            operation_id, existing_payment_id, existing_operation_type = existing
+            if existing_payment_id != payment_id or existing_operation_type != operation_type:
+                raise ValueError("provider operation idempotency key conflict")
+
         self.conn.execute(
             """UPDATE payments
                SET provider_operation_id=%s, updated_at=now()
                WHERE id=%s""",
-            (row[0], payment_id),
+            (operation_id, payment_id),
         )
-        return row[0]
+        return operation_id
 
 
 class BudgetRepository:
