@@ -36,13 +36,35 @@ def process_one(*, conn, payment_id: UUID, provider: PaymentProvider,
         )
         orchestrator.payments.update_status(payment_id, "PROCESSING")
 
-    # The provider call happens after the reservation transaction commits.
-    outcome = provider.charge(
-        str(payment_id),
-        int(amount * Decimal("100")),
-        currency,
-        f"payment:{payment_id}:charge",
-    )
+    # Recover a durable provider outcome before attempting any external call.
+    # This is the crash-recovery path: a worker may have completed provider
+    # execution but died before finalization.
+    durable = conn.execute(
+        """SELECT status, provider_reference
+           FROM provider_operations
+           WHERE payment_id=%s AND operation_type='CHARGE'
+           ORDER BY created_at DESC
+           LIMIT 1""",
+        (payment_id,),
+    ).fetchone()
+    durable_outcome = {
+        "SUCCEEDED": ProviderOutcome.SUCCEEDED,
+        "FAILED": ProviderOutcome.FAILED,
+        "UNKNOWN": ProviderOutcome.UNKNOWN,
+    }.get(durable[0]) if durable else None
+
+    if durable_outcome is not None:
+        outcome = durable_outcome
+        provider_reference = durable[1]
+    else:
+        # The provider call happens after the reservation transaction commits.
+        outcome = provider.charge(
+            str(payment_id),
+            int(amount * Decimal("100")),
+            currency,
+            f"payment:{payment_id}:charge",
+        )
+        provider_reference = None
 
     with UnitOfWork(conn):
         orchestrator = PaymentOrchestrator(conn, provider)
@@ -55,5 +77,6 @@ def process_one(*, conn, payment_id: UUID, provider: PaymentProvider,
             customer_ledger_account_id=customer_ledger_account_id,
             clearing_ledger_account_id=clearing_ledger_account_id,
             outcome=outcome,
+            provider_reference=provider_reference,
             correlation_id=correlation_id,
         )
