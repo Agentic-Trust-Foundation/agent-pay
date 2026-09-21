@@ -110,9 +110,14 @@ def test_lifecycle_operations_execute_provider_outside_transaction(operation, in
                     payment_id=payment, amount=Decimal("100"), currency="USD"
                 )
             assert queued in {"PROCESSING", "VOID_REQUESTED"}
+            operation_id = conn.execute(
+                "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+                (payment,),
+            ).fetchone()[0]
 
         provider = TransactionAwareProvider(conn)
         result = ProviderOperationWorker(conn, provider).run_once(
+            operation_id=operation_id,
             customer_ledger_account_id=customer,
             clearing_ledger_account_id=clearing,
         )
@@ -148,7 +153,11 @@ def test_refund_uses_persisted_partial_amount_and_finishes_in_worker():
             ) == "REFUND_PROCESSING"
 
         provider = TransactionAwareProvider(conn)
-        assert ProviderOperationWorker(conn, provider).run_once() == "SUCCEEDED"
+        operation_id = conn.execute(
+            "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+            (payment,),
+        ).fetchone()[0]
+        assert ProviderOperationWorker(conn, provider).run_once(operation_id=operation_id) == "SUCCEEDED"
         assert provider.calls == 1
 
         tx = conn.execute(
@@ -178,7 +187,12 @@ def test_unknown_outcome_can_be_explicitly_retried_with_same_idempotency_key():
 
         unknown_provider = TransactionAwareProvider(conn, ProviderOutcome.UNKNOWN)
         worker = ProviderOperationWorker(conn, unknown_provider)
+        operation_id = conn.execute(
+            "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+            (payment,),
+        ).fetchone()[0]
         assert worker.run_once(
+            operation_id=operation_id,
             customer_ledger_account_id=customer,
             clearing_ledger_account_id=clearing,
         ) == "UNKNOWN_EXTERNAL_OUTCOME"
@@ -194,6 +208,7 @@ def test_unknown_outcome_can_be_explicitly_retried_with_same_idempotency_key():
 
         success_provider = TransactionAwareProvider(conn, ProviderOutcome.SUCCEEDED)
         assert ProviderOperationWorker(conn, success_provider).run_once(
+            operation_id=operation[0],
             customer_ledger_account_id=customer,
             clearing_ledger_account_id=clearing,
         ) == "SUCCEEDED"
