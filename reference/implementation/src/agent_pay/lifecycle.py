@@ -141,8 +141,11 @@ class PaymentLifecycle:
         )
         key = f"payment:{payment_id}:refund:{amount}:{currency}"
         existing = self._existing_operation(payment_id, "REFUND", key)
-        if existing and existing[1] in {"PENDING", "PROCESSING", "UNKNOWN"}:
-            return "UNKNOWN_EXTERNAL_OUTCOME" if existing[1] == "UNKNOWN" else "REFUND_PROCESSING"
+        if existing:
+            if existing[1] == "SUCCEEDED":
+                return "REFUNDED" if locked[0] == "REFUNDED" else "SUCCEEDED"
+            if existing[1] in {"PENDING", "PROCESSING", "UNKNOWN"}:
+                return "UNKNOWN_EXTERNAL_OUTCOME" if existing[1] == "UNKNOWN" else "REFUND_PROCESSING"
 
         captured = self.conn.execute(
             """SELECT COALESCE(SUM(amount),0) FROM transactions
