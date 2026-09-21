@@ -22,6 +22,4 @@ jobs:
         run: pytest -q -m conformance
       - name: Check ATF-Agent-Pay cross-repository contract
         working-directory: .
-        env:
-          ATF_REPO_TOKEN: ${{ secrets.ATF_REPO_TOKEN }}
         run: python tools/check_cross_repo_conformance.py
