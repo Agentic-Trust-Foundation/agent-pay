@@ -125,11 +125,20 @@ class PaymentOrchestrator:
             (provider_reference, payment_id),
         )
         self.budgets.consume(reservation_id)
+        transaction_id = self.conn.execute(
+            """INSERT INTO transactions
+               (payment_id, type, status, amount, currency, idempotency_key, posted_at)
+               VALUES (%s, 'CAPTURE', 'POSTED', %s, %s, %s, now())
+               ON CONFLICT (idempotency_key) DO UPDATE
+               SET status='POSTED', posted_at=COALESCE(transactions.posted_at, now())
+               RETURNING id""",
+            (payment_id, str(amount), currency, f"tx:{payment_id}:capture"),
+        ).fetchone()[0]
         post_journal(
             self.conn,
             currency=currency,
-            reference_type="PAYMENT",
-            reference_id=payment_id,
+            reference_type="TRANSACTION",
+            reference_id=transaction_id,
             idempotency_key=f"payment:{payment_id}:capture",
             correlation_id=correlation_id,
             postings=[
