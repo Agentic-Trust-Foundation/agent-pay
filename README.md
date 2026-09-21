@@ -58,7 +58,7 @@ Provider / Payment Rail Adapters
 
 - normative protocol and architecture documents;
 - OpenAPI V1 contract;
-- PostgreSQL schema plus ordered convergence migrations 001–013;
+- PostgreSQL schema plus ordered convergence migrations 001–014;
 - V1 JSON Schema / conformance vectors;
 - PostgreSQL-backed reference implementation v1.0.0;
 - cryptographic ATF evidence verification adapter;
