@@ -80,3 +80,52 @@ def test_postgres_double_entry_and_outbox():
                 ("CREDIT", Decimal("12.5000")),
                 ("DEBIT", Decimal("12.5000")),
             ]
+
+
+def test_provider_operation_idempotency_key_cannot_change_payment_or_operation():
+    if not os.getenv("DATABASE_URL"):
+        pytest.skip("DATABASE_URL is required for PostgreSQL integration tests")
+
+    from agent_pay.repositories import PaymentRepository
+
+    with connection() as conn:
+        with conn.transaction():
+            account_id = conn.execute(
+                "INSERT INTO accounts (owner_reference) VALUES (%s) RETURNING id",
+                (f"phase15-{uuid4()}",),
+            ).fetchone()[0]
+            agent_id = conn.execute(
+                "INSERT INTO agents (account_id, name) VALUES (%s,%s) RETURNING id",
+                (account_id, "phase15-agent"),
+            ).fetchone()[0]
+            request_one = conn.execute(
+                """INSERT INTO payment_requests
+                   (account_id, agent_id, amount, currency, purpose, idempotency_key)
+                   VALUES (%s,%s,10,'USD','phase15',%s) RETURNING id""",
+                (account_id, agent_id, f"phase15:req:{uuid4()}"),
+            ).fetchone()[0]
+            request_two = conn.execute(
+                """INSERT INTO payment_requests
+                   (account_id, agent_id, amount, currency, purpose, idempotency_key)
+                   VALUES (%s,%s,20,'USD','phase15',%s) RETURNING id""",
+                (account_id, agent_id, f"phase15:req:{uuid4()}"),
+            ).fetchone()[0]
+            payment_one = conn.execute(
+                "INSERT INTO payments (payment_request_id, amount, currency, status) VALUES (%s,10,'USD','PROCESSING') RETURNING id",
+                (request_one,),
+            ).fetchone()[0]
+            payment_two = conn.execute(
+                "INSERT INTO payments (payment_request_id, amount, currency, status) VALUES (%s,20,'USD','PROCESSING') RETURNING id",
+                (request_two,),
+            ).fetchone()[0]
+
+            repository = PaymentRepository(conn)
+            key = f"phase15:operation:{uuid4()}"
+            operation_id = repository.create_provider_operation(payment_one, "CAPTURE", key)
+            assert repository.create_provider_operation(payment_one, "CAPTURE", key) == operation_id
+
+            with pytest.raises(ValueError, match="idempotency key conflict"):
+                repository.create_provider_operation(payment_one, "VOID", key)
+
+            with pytest.raises(ValueError, match="idempotency key conflict"):
+                repository.create_provider_operation(payment_two, "CAPTURE", key)

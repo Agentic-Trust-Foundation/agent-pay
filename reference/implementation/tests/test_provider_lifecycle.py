@@ -75,3 +75,44 @@ def test_refund_amount_may_be_partial_but_currency_must_match():
             requested_currency="EUR",
             payment_currency="USD",
         )
+
+
+def test_terminal_replays_require_exact_intent():
+    from decimal import Decimal
+    from agent_pay.lifecycle import PaymentLifecycle
+    import pytest
+
+    with pytest.raises(ValueError, match="does not match payment amount"):
+        PaymentLifecycle._validate_operation_amount(
+            requested_amount=Decimal("9.00"),
+            requested_currency="USD",
+            payment_amount=Decimal("10.00"),
+            payment_currency="USD",
+        )
+
+    amount, currency = PaymentLifecycle._validate_operation_amount(
+        requested_amount=Decimal("10.00"),
+        requested_currency="usd",
+        payment_amount=Decimal("10.00"),
+        payment_currency="USD",
+    )
+    assert amount == Decimal("10.00")
+    assert currency == "USD"
+
+
+def test_partial_refund_replay_preserves_non_terminal_payment_state():
+    from decimal import Decimal
+    from agent_pay.lifecycle import PaymentLifecycle
+
+    assert PaymentLifecycle._refund_replay_status(
+        transaction_status="POSTED",
+        refundable_amount=Decimal("5.00"),
+    ) == "SUCCEEDED"
+    assert PaymentLifecycle._refund_replay_status(
+        transaction_status="POSTED",
+        refundable_amount=Decimal("0"),
+    ) == "REFUNDED"
+    assert PaymentLifecycle._refund_replay_status(
+        transaction_status="FAILED",
+        refundable_amount=Decimal("5.00"),
+    ) == "REFUND_FAILED"
