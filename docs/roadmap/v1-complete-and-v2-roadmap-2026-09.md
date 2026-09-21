@@ -159,7 +159,11 @@ Only the first four should normally land without reopening V1. V2 semantic chang
 - Propagate revocation and constraints.
 - Bind financial authority to delegated principals.
 
-## 9. Work that can proceed without changing V1
+## 9. Post-V1 implementation hardening
+
+The V1 semantic contract remains frozen, but the reference implementation may continue non-breaking hardening. The current cross-repository cycle is validating the durable payment lifecycle against PostgreSQL, including provider operation binding, provider outcomes, callback recovery, ledger/outbox behavior, capture, void, refund, and idempotent retries. CI evidence is required before this runtime gate is considered verified.
+
+## 10. Work that can proceed without changing V1
 
 - More tests and conformance vectors.
 - Documentation/examples.
@@ -171,7 +175,7 @@ Only the first four should normally land without reopening V1. V2 semantic chang
 - Production security/compliance work.
 - Integration experiments with ATF and commerce systems.
 
-## 10. Definition of done for a future production profile
+## 11. Definition of done for a future production profile
 
 A production/provider profile should document:
 - provider/issuer scope;
@@ -187,7 +191,7 @@ A production/provider profile should document:
 - conformance tests;
 - deployment runbook.
 
-## 11. Anti-regression checklist
+## 12. Anti-regression checklist
 
 Before restarting a V1 review, check:
 - Did the V1 contract change?
@@ -201,7 +205,7 @@ Before restarting a V1 review, check:
 
 If none apply, continue from this baseline.
 
-## 12. Project map
+## 13. Project map
 
 ```text
 ATF VERIFIED AUTHORITY
@@ -222,6 +226,6 @@ ATF VERIFIED AUTHORITY
    PROVIDER / PAYMENT RAIL
 ```
 
-## 13. Current next action
+## 14. Current next action
 
 V1 is done. Select the next workstream from the V2 roadmap or from the deployment-specific profile list; do not recreate the V1 implementation from scratch.
