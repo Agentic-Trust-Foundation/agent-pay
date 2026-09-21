@@ -176,3 +176,55 @@ def test_unknown_provider_reference_is_discrepancy():
             observed_currency="USD",
         )
         assert result == "DISCREPANCY"
+
+
+def test_settlement_uses_provider_operation_amount_for_partial_operations():
+    if not os.getenv("DATABASE_URL"):
+        return
+    with connection() as conn:
+        with conn.transaction():
+            operation_id, provider_reference = _fixture(conn)
+            conn.execute(
+                """UPDATE provider_operations
+                   SET operation_type='REFUND',
+                       request_payload='{"amount":"10.00","currency":"USD"}'::jsonb
+                   WHERE id=%s""",
+                (operation_id,),
+            )
+        result = SettlementRepository(conn).ingest(
+            provider_name="mock",
+            settlement_reference=f"settle_partial_{uuid4()}",
+            provider_reference=provider_reference,
+            observed_amount="10.00",
+            observed_currency="USD",
+        )
+        assert result == "MATCHED"
+
+
+def test_ambiguous_provider_reference_is_a_discrepancy():
+    if not os.getenv("DATABASE_URL"):
+        return
+    with connection() as conn:
+        with conn.transaction():
+            operation_id, provider_reference = _fixture(conn)
+            payment_id = conn.execute(
+                "SELECT payment_id FROM provider_operations WHERE id=%s",
+                (operation_id,),
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO provider_operations
+                   (payment_id, operation_type, idempotency_key, provider_reference, status)
+                   VALUES (%s,'CHARGE',%s,%s,'SUCCEEDED')""",
+                (payment_id, f"ambiguous:{uuid4()}", provider_reference),
+            )
+        result = SettlementRepository(conn).ingest(
+            provider_name="mock",
+            settlement_reference=f"settle_ambiguous_{uuid4()}",
+            provider_reference=provider_reference,
+            observed_amount="25.00",
+            observed_currency="USD",
+        )
+        assert result == "DISCREPANCY"
+        assert conn.execute(
+            "SELECT discrepancy_code, provider_operation_id FROM reconciliation_records ORDER BY created_at DESC LIMIT 1"
+        ).fetchone() == ("AMBIGUOUS_PROVIDER_REFERENCE", None)
