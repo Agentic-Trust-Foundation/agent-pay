@@ -126,6 +126,15 @@ class PaymentLifecycle:
             raise ValueError("payment not found")
         if locked[0] not in ("SUCCEEDED", "REFUND_FAILED", "REFUNDED"):
             raise ValueError("only a captured payment can be refunded")
+        existing_refund = self.conn.execute(
+            """SELECT status FROM transactions
+               WHERE idempotency_key=%s""",
+            (f"tx:{payment_id}:refund:{amount}:{currency}",),
+        ).fetchone()
+        if existing_refund and existing_refund[0] == "POSTED":
+            return "REFUNDED"
+        if existing_refund and existing_refund[0] == "FAILED":
+            return "REFUND_FAILED"
         captured = self.conn.execute(
             """SELECT COALESCE(SUM(amount),0) FROM transactions
                WHERE payment_id=%s AND type='CAPTURE' AND status='POSTED'""", (payment_id,)
