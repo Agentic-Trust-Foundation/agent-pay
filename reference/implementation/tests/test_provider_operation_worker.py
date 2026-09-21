@@ -214,3 +214,47 @@ def test_unknown_outcome_can_be_explicitly_retried_with_same_idempotency_key():
             clearing_ledger_account_id=clearing,
         ) == "SUCCEEDED"
         assert success_provider.keys == [operation[2]]
+
+
+def test_stale_processing_operation_is_recoverable():
+    if not os.getenv("DATABASE_URL"):
+        pytest.skip("DATABASE_URL is required for PostgreSQL integration tests")
+
+    with connection() as conn:
+        with conn.transaction():
+            payment, _, _, _ = _payment(conn, "PROCESSING")
+            operation = conn.execute(
+                """INSERT INTO provider_operations
+                   (payment_id,operation_type,idempotency_key,status,processing_at)
+                   VALUES (%s,'CAPTURE',%s,'PROCESSING',now() - interval '10 minutes')
+                   RETURNING id""",
+                (payment, f"recovery:{payment}"),
+            ).fetchone()[0]
+
+        worker = ProviderOperationWorker(conn, TransactionAwareProvider(conn))
+        assert worker.recover_stale(timeout_seconds=60) == 1
+        assert conn.execute(
+            "SELECT status,processing_at FROM provider_operations WHERE id=%s", (operation,)
+        ).fetchone() == ("PENDING", None)
+
+
+def test_terminal_operation_cannot_be_overwritten_by_late_worker():
+    if not os.getenv("DATABASE_URL"):
+        pytest.skip("DATABASE_URL is required for PostgreSQL integration tests")
+
+    with connection() as conn:
+        with conn.transaction():
+            payment, _, customer, clearing = _payment(conn, "SUCCEEDED")
+            operation = conn.execute(
+                """INSERT INTO provider_operations
+                   (payment_id,operation_type,idempotency_key,status,provider_reference,completed_at)
+                   VALUES (%s,'REFUND',%s,'SUCCEEDED','provider-ref',now())
+                   RETURNING id""",
+                (payment, f"race:{payment}"),
+            ).fetchone()[0]
+
+        provider = ProviderOperationWorker(conn, TransactionAwareProvider(conn))
+        assert provider.run_once(operation_id=operation) == "SUCCEEDED"
+        assert conn.execute(
+            "SELECT status,provider_reference FROM provider_operations WHERE id=%s", (operation,)
+        ).fetchone() == ("SUCCEEDED", "provider-ref")
