@@ -11,3 +11,10 @@ def test_reconciliation_detects_amount_mismatch():
 
 def test_reconciliation_detects_currency_mismatch():
     assert compare_amounts(expected_amount="10.00", observed_amount="10.00", expected_currency="USD", observed_currency="EUR") == ("DISCREPANCY", "CURRENCY_MISMATCH")
+
+
+def test_reconciliation_normalizes_currency_and_detects_mismatch():
+    from agent_pay.reconciliation import compare_amounts
+    assert compare_amounts(expected_amount="10.00", observed_amount="10", expected_currency="usd", observed_currency="USD") == ("MATCHED", None)
+    assert compare_amounts(expected_amount="10.00", observed_amount="9.99", expected_currency="USD", observed_currency="USD") == ("DISCREPANCY", "AMOUNT_MISMATCH")
+    assert compare_amounts(expected_amount="10.00", observed_amount="10", expected_currency="USD", observed_currency="EUR") == ("DISCREPANCY", "CURRENCY_MISMATCH")
