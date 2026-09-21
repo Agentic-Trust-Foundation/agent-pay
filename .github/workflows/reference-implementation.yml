@@ -60,6 +60,7 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/012_outbox_worker_recovery.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/013_request_fingerprint.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/014_provider_operation_recovery.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/015_ledger_settlement_integrity.sql
       - name: Run Ruff lint
         run: ruff check src tests
 
