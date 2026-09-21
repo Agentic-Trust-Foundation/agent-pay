@@ -129,7 +129,7 @@ class PaymentOrchestrator:
             """INSERT INTO transactions
                (payment_id, type, status, amount, currency, idempotency_key, posted_at)
                VALUES (%s, 'CAPTURE', 'POSTED', %s, %s, %s, now())
-               ON CONFLICT (idempotency_key) DO UPDATE
+               ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO UPDATE
                SET status='POSTED', posted_at=COALESCE(transactions.posted_at, now())
                RETURNING id""",
             (payment_id, str(amount), currency, f"tx:{payment_id}:capture"),
