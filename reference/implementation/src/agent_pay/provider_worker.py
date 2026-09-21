@@ -4,7 +4,6 @@ from uuid import UUID
 
 from .orchestrator import PaymentOrchestrator
 from .provider import PaymentProvider, ProviderOutcome
-from .repositories import PaymentRepository
 
 
 class ProviderOperationWorker:
