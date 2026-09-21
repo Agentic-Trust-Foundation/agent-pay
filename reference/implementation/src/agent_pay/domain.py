@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from datetime import datetime
 from enum import StrEnum
 
 
@@ -47,6 +48,10 @@ class PaymentIntent:
     amount: Money
     merchant_domain: str
     idempotency_key: str
+    merchant_category: str | None = None
+    region: str | None = None
+    instrument_class: str | None = None
+    requested_at: datetime | None = None
 
     def fingerprint(self) -> tuple[str, str, Decimal, str, str]:
         return (
