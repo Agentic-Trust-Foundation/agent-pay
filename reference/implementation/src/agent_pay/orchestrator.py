@@ -58,7 +58,7 @@ class PaymentOrchestrator:
             "CHARGE",
             f"payment:{payment_id}:charge",
         )
-        enqueue(self.conn, event_type="PaymentStarted",
+        enqueue(self.conn, event_type="PaymentStarted", aggregate_type="payment",
                 aggregate_id=payment_id, payload={"reservation_id": str(reservation_id)},
                 correlation_id=correlation_id)
         return reservation_id
