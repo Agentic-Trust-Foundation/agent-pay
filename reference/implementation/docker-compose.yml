@@ -22,6 +22,7 @@ services:
       - ../../specs/v1/migrations/010_batch2_audit_notification_security.sql:/docker-entrypoint-initdb.d/110-batch2-audit-notification-security.sql:ro
       - ../../specs/v1/migrations/011_authorization_evidence_integrity.sql:/docker-entrypoint-initdb.d/120-authorization-evidence-integrity.sql:ro
       - ../../specs/v1/migrations/012_outbox_worker_recovery.sql:/docker-entrypoint-initdb.d/130-outbox-worker-recovery.sql:ro
+      - ../../specs/v1/migrations/013_request_fingerprint.sql:/docker-entrypoint-initdb.d/140-request-fingerprint.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agent_pay"]
       interval: 5s
