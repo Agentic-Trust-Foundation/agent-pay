@@ -88,6 +88,15 @@ class PaymentLifecycle:
             payment_amount=row[0], payment_currency=row[1],
         )
         key = f"payment:{payment_id}:capture"
+        competing = self.conn.execute(
+            """SELECT status FROM provider_operations
+               WHERE payment_id=%s AND operation_type='VOID'
+                 AND status IN ('PENDING','PROCESSING','UNKNOWN')
+               LIMIT 1""",
+            (payment_id,),
+        ).fetchone()
+        if competing:
+            raise ValueError("payment has a pending void operation")
         existing = self._existing_operation(payment_id, "CAPTURE", key)
         if existing and existing[1] in {"PENDING", "PROCESSING", "UNKNOWN"}:
             return "UNKNOWN_EXTERNAL_OUTCOME" if existing[1] == "UNKNOWN" else "PROCESSING"
@@ -116,6 +125,15 @@ class PaymentLifecycle:
             payment_amount=row[0], payment_currency=row[1],
         )
         key = f"payment:{payment_id}:void"
+        competing = self.conn.execute(
+            """SELECT status FROM provider_operations
+               WHERE payment_id=%s AND operation_type='CAPTURE'
+                 AND status IN ('PENDING','PROCESSING','UNKNOWN')
+               LIMIT 1""",
+            (payment_id,),
+        ).fetchone()
+        if competing:
+            raise ValueError("payment has a pending capture operation")
         existing = self._existing_operation(payment_id, "VOID", key)
         if existing and existing[1] in {"PENDING", "PROCESSING", "UNKNOWN"}:
             return "UNKNOWN_EXTERNAL_OUTCOME" if existing[1] == "UNKNOWN" else "VOID_REQUESTED"
