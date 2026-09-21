@@ -80,6 +80,8 @@ class ProviderOperationWorker:
         provider_reference = getattr(self.provider, "reference_for", lambda _key: None)(idempotency_key)
         with self.conn.transaction():
             if operation_type == "CHARGE":
+                if customer is None or clearing is None:
+                    raise ValueError("ledger accounts are required for charge finalization")
                 return PaymentOrchestrator(self.conn, self.provider).finalize(
                     payment_id=payment_id,
                     payment_request_id=request_id,
