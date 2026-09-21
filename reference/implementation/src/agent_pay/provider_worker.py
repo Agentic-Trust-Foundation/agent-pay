@@ -32,11 +32,28 @@ class ProviderOperationWorker:
                 return None
             self.conn.execute(
                 """UPDATE provider_operations
-                   SET status='PROCESSING'
+                   SET status='PROCESSING', processing_at=now(), attempts=attempts+1
                    WHERE id=%s AND status='PENDING'""",
                 (row[0],),
             )
             return row
+
+    def recover_stale(self, *, timeout_seconds: int = 300, limit: int = 25) -> int:
+        with self.conn.transaction():
+            rows = self.conn.execute(
+                """SELECT id FROM provider_operations
+                   WHERE status='PROCESSING' AND processing_at IS NOT NULL
+                     AND processing_at < now() - (%s * interval '1 second')
+                   ORDER BY processing_at FOR UPDATE SKIP LOCKED LIMIT %s""",
+                (timeout_seconds, limit),
+            ).fetchall()
+            ids = [row[0] for row in rows]
+            if ids:
+                self.conn.execute(
+                    "UPDATE provider_operations SET status='PENDING', processing_at=NULL WHERE id = ANY(%s)",
+                    (ids,),
+                )
+            return len(ids)
 
     def retry_unknown(self, operation_id: UUID) -> bool:
         with self.conn.transaction():
@@ -74,14 +91,19 @@ class ProviderOperationWorker:
             with self.conn.transaction():
                 self.conn.execute(
                     """UPDATE provider_operations
-                       SET status='PENDING', response_payload=%s::jsonb
+                       SET status='PENDING', processing_at=NULL, last_error=%s, response_payload=%s::jsonb
                        WHERE id=%s AND status='PROCESSING'""",
-                    (json.dumps({"error": str(exc)}), operation_id),
+                    (str(exc), json.dumps({"error": str(exc)}), operation_id),
                 )
             return "RETRY_PENDING"
 
         provider_reference = getattr(self.provider, "reference_for", lambda _key: None)(idempotency_key)
         with self.conn.transaction():
+            current = self.conn.execute("SELECT status FROM provider_operations WHERE id=%s FOR UPDATE", (operation_id,)).fetchone()
+            if not current:
+                raise ValueError("provider operation not found")
+            if current[0] != "PROCESSING":
+                return self._terminal_result_for_operation(payment_id, operation_type, current[0])
             if operation_type == "CHARGE":
                 if customer is None or clearing is None:
                     raise ValueError("ledger accounts are required for charge finalization")
@@ -105,6 +127,16 @@ class ProviderOperationWorker:
                 clearing_ledger_account_id=clearing,
                 correlation_id=correlation_id,
             )
+
+    def _terminal_result_for_operation(self, payment_id: UUID, operation_type: str, status: str) -> str:
+        if status == "UNKNOWN":
+            return "UNKNOWN_EXTERNAL_OUTCOME"
+        if status == "FAILED":
+            return {"CHARGE": "FAILED", "CAPTURE": "FAILED", "VOID": "VOID_FAILED", "REFUND": "REFUND_FAILED"}[operation_type]
+        if status == "SUCCEEDED":
+            row = self.conn.execute("SELECT status FROM payments WHERE id=%s", (payment_id,)).fetchone()
+            return row[0] if row else "SUCCEEDED"
+        return "PROCESSING"
 
     @staticmethod
     def _amount_minor(amount: Decimal) -> int:
@@ -160,7 +192,7 @@ class ProviderOperationWorker:
         self.conn.execute(
             """UPDATE provider_operations
                SET status=%s, provider_reference=COALESCE(%s, provider_reference),
-                   completed_at=CASE WHEN %s IN ('SUCCEEDED','FAILED','UNKNOWN') THEN now() ELSE completed_at END
+                   processing_at=NULL, completed_at=CASE WHEN %s IN ('SUCCEEDED','FAILED','UNKNOWN') THEN now() ELSE completed_at END
              WHERE id=%s AND status='PROCESSING'""",
             (status, provider_reference, status, operation_id),
         )
