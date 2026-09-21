@@ -1,7 +1,7 @@
 # Phase 18 Final Audit — V1/V2 Baseline
 
 **Audit date:** 2026-09-21  
-**Audited main commit:** `31ffe43b191d13ee3690f11520177a23e2432162`  
+**Audited main commit:** `eb2f06d6d3da5c14de269e3da92d068cb515ad65`  
 **Issue:** #18  
 **Classification:** Final audit / documentation-only
 
@@ -17,7 +17,7 @@ The V1 claim remains intentionally limited to a provider-neutral protocol, confo
 
 Current `main`:
 
-`31ffe43b191d13ee3690f11520177a23e2432162`
+`eb2f06d6d3da5c14de269e3da92d068cb515ad65`
 
 Post-Phase-17 GitHub Actions on this commit:
 
@@ -71,9 +71,9 @@ A Dependabot PR was open at audit time:
 
 - PR #17 — Python `mypy` dependency update.
 
-Its existence is not a V1 protocol defect. It is normal maintenance work and must continue through the normal CI/governance path before merge.
+Its existence was not a V1 protocol defect. It was normal maintenance work and remains subject to normal CI/governance handling.
 
-The Phase 18 audit issue itself is the only open project issue at audit time.
+The Phase 18 audit issue was the final V1 audit issue; subsequent maintenance is tracked through normal issues and dependency updates.
 
 ## Deployment/provider boundaries
 
