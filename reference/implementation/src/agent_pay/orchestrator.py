@@ -30,7 +30,7 @@ class PaymentOrchestrator:
                  JOIN payment_requests pr ON pr.id=p.payment_request_id
                  LEFT JOIN authorization_evidence ae ON ae.id=pr.authorization_evidence_id
                 WHERE p.id=%s AND pr.id=%s
-                FOR UPDATE""",
+                FOR UPDATE OF p, pr""",
             (payment_id, payment_request_id),
         ).fetchone()
         if not bound:
