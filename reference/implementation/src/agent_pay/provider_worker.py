@@ -14,7 +14,7 @@ class ProviderOperationWorker:
         self.conn = conn
         self.provider = provider
 
-    def claim(self):
+    def claim(self, operation_id: UUID | None = None):
         with self.conn.transaction():
             row = self.conn.execute(
                 """SELECT po.id, po.payment_id, po.operation_type, po.idempotency_key,
@@ -22,9 +22,11 @@ class ProviderOperationWorker:
                      FROM provider_operations po
                      JOIN payments p ON p.id=po.payment_id
                     WHERE po.status='PENDING'
+                      AND (%s IS NULL OR po.id=%s)
                     ORDER BY po.created_at
                     FOR UPDATE SKIP LOCKED
-                    LIMIT 1"""
+                    LIMIT 1""",
+                (operation_id, operation_id),
             ).fetchone()
             if not row:
                 return None
@@ -46,10 +48,11 @@ class ProviderOperationWorker:
             )
             return result.rowcount == 1
 
-    def run_once(self, *, customer_ledger_account_id: UUID | None = None,
+    def run_once(self, *, operation_id: UUID | None = None,
+                 customer_ledger_account_id: UUID | None = None,
                  clearing_ledger_account_id: UUID | None = None,
                  correlation_id: str | None = None) -> str | None:
-        operation = self.claim()
+        operation = self.claim(operation_id)
         if operation is None:
             return None
 
@@ -228,13 +231,22 @@ class ProviderOperationWorker:
                 )
             elif operation_type == "VOID":
                 tx_key = f"tx:{payment_id}:void"
-                self.conn.execute(
-                    """INSERT INTO transactions
-                       (payment_id,type,status,amount,currency,external_reference,idempotency_key,posted_at)
-                       VALUES (%s,'VOID','POSTED',%s,%s,%s,%s,now())
-                       ON CONFLICT (idempotency_key) DO UPDATE SET external_reference=EXCLUDED.external_reference""",
-                    (payment_id, str(amount), currency, provider_reference, tx_key),
-                )
+                existing_void = self.conn.execute(
+                    "SELECT id FROM transactions WHERE idempotency_key=%s FOR UPDATE",
+                    (tx_key,),
+                ).fetchone()
+                if existing_void:
+                    self.conn.execute(
+                        "UPDATE transactions SET external_reference=COALESCE(%s,external_reference), status='POSTED', posted_at=now() WHERE id=%s",
+                        (provider_reference, existing_void[0]),
+                    )
+                else:
+                    self.conn.execute(
+                        """INSERT INTO transactions
+                           (payment_id,type,status,amount,currency,external_reference,idempotency_key,posted_at)
+                           VALUES (%s,'VOID','POSTED',%s,%s,%s,%s,now())""",
+                        (payment_id, str(amount), currency, provider_reference, tx_key),
+                    )
 
         if outcome == ProviderOutcome.FAILED and operation_type == "REFUND":
             self.conn.execute(
