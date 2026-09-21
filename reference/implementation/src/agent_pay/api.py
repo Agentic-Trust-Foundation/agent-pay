@@ -9,6 +9,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from psycopg.errors import UniqueViolation
 
 from .auth import require_agent, resolve_approval_bearer, resolve_bearer
 from .authorization import AuthorizationContext, AuthorizationError
@@ -218,11 +219,29 @@ def create_payment(
                     ),
                 ).fetchone()[0]
 
-            request_id = repo.create_request(
-                account_id=request.account_id, agent_id=request.agent_id, amount=request.amount.value,
-                currency=currency, purpose=request.purpose, items=[i.model_dump() for i in request.items],
-                idempotency_key=idempotency_key, request_fingerprint=fingerprint, merchant_id=merchant_id,
-            )
+            try:
+                # The unique business key closes the race between concurrent
+                # requests using the same idempotency key. A savepoint keeps
+                # the outer transaction usable after the uniqueness conflict.
+                with conn.transaction():
+                    request_id = repo.create_request(
+                        account_id=request.account_id, agent_id=request.agent_id, amount=request.amount.value,
+                        currency=currency, purpose=request.purpose, items=[i.model_dump() for i in request.items],
+                        idempotency_key=idempotency_key, request_fingerprint=fingerprint, merchant_id=merchant_id,
+                    )
+            except UniqueViolation:
+                existing = repo.find_by_idempotency(request.account_id, idempotency_key)
+                if not existing:
+                    raise HTTPException(status_code=409, detail="idempotency key conflict could not be resolved")
+                if existing[5] and existing[5] != fingerprint:
+                    raise HTTPException(status_code=409, detail="idempotency key was already used with a different payment request")
+                payment = conn.execute(
+                    "SELECT id, status FROM payments WHERE payment_request_id=%s",
+                    (existing[0],),
+                ).fetchone()
+                if payment:
+                    return {"payment_id": str(payment[0]), "status": payment[1]}
+                raise HTTPException(status_code=409, detail="idempotency key already belongs to an incomplete request")
             if evidence_id:
                 conn.execute(
                     """UPDATE payment_requests
