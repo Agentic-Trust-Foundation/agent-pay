@@ -38,7 +38,7 @@ class ProviderEventResolver:
             return "DUPLICATE"
 
         row = self.conn.execute(
-            """SELECT po.payment_id, po.operation_type, po.idempotency_key, po.request_payload,
+            """SELECT po.payment_id, po.operation_type, po.idempotency_key, po.request_payload, po.status,
                       p.payment_request_id, p.amount, p.currency, p.status,
                       pr.budget_reservation_id
                  FROM provider_operations po
@@ -49,9 +49,9 @@ class ProviderEventResolver:
         ).fetchone()
         if not row:
             raise ValueError("provider operation not found")
-        payment_id, operation_type, _, request_payload, request_id, amount, currency, status, reservation_id = row
+        payment_id, operation_type, _, request_payload, operation_status, request_id, amount, currency, payment_status, reservation_id = row
 
-        if status not in ("UNKNOWN_EXTERNAL_OUTCOME", "PROCESSING", "PAYMENT_PENDING"):
+        if operation_status not in ("UNKNOWN", "PENDING", "PROCESSING"):
             self.conn.execute(
                 "UPDATE provider_events SET processing_status='PROCESSED', processed_at=now() WHERE id=%s",
                 (event_id,),
