@@ -1,5 +1,8 @@
 name: Agent-Pay Conformance
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
