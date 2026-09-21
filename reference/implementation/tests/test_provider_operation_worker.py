@@ -255,7 +255,7 @@ def test_terminal_operation_cannot_be_overwritten_by_late_worker():
             ).fetchone()[0]
 
         provider = ProviderOperationWorker(conn, TransactionAwareProvider(conn))
-        assert provider.run_once(operation_id=operation) == "SUCCEEDED"
+        assert provider.run_once(operation_id=operation) is None
         assert conn.execute(
             "SELECT status,provider_reference FROM provider_operations WHERE id=%s", (operation,)
         ).fetchone() == ("SUCCEEDED", "provider-ref")
