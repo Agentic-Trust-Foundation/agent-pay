@@ -8,19 +8,22 @@ version = "1.0.0"
 description = "Reference implementation for the Agent-Pay protocol"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi>=0.115,<1",
-  "uvicorn>=0.30,<1",
-  "pydantic>=2.8,<3",
-  "psycopg[binary]>=3.2,<4",
-  "PyJWT[crypto]>=2.9,<3",
+  "fastapi>=0.141.1,<1",
+  "uvicorn>=0.53,<1",
+  "pydantic>=2.13.5,<3",
+  "psycopg[binary]>=3.3.6,<4",
+  "PyJWT[crypto]>=2.14.0,<3",
 ]
 
 [project.optional-dependencies]
 test = [
-  "pytest>=8,<9",
+  "pytest>=9.0.3,<10",
   "httpx>=0.27,<1",
   "PyYAML>=6,<7",
-  "cryptography>=43,<46",
+  "cryptography>=50.0.1,<51",
+  "mypy>=1.13,<2",
+  "pip-audit>=2.7,<3",
+  "ruff>=0.16,<1",
 ]
 
 [tool.pytest.ini_options]
@@ -30,3 +33,17 @@ markers = [
   "integration: PostgreSQL-backed integration tests",
 ]
 pythonpath = ["src"]
+
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = true

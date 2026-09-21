@@ -2,7 +2,6 @@ import os
 from decimal import Decimal
 from uuid import uuid4
 
-import psycopg
 import pytest
 
 from agent_pay.db import connection
@@ -39,8 +38,18 @@ def test_postgres_double_entry_and_outbox():
                 idempotency_key=f"test:{uuid4()}",
                 correlation_id="test-correlation",
                 postings=[
-                    {"ledger_account_id": debit, "side": "DEBIT", "amount": "12.50", "currency": currency},
-                    {"ledger_account_id": credit, "side": "CREDIT", "amount": "12.50", "currency": currency},
+                    {
+                        "ledger_account_id": debit,
+                        "side": "DEBIT",
+                        "amount": "12.50",
+                        "currency": currency,
+                    },
+                    {
+                        "ledger_account_id": credit,
+                        "side": "CREDIT",
+                        "amount": "12.50",
+                        "currency": currency,
+                    },
                 ],
             )
             event_id = enqueue(
@@ -56,10 +65,18 @@ def test_postgres_double_entry_and_outbox():
                 "SELECT count(*) FROM ledger_postings WHERE journal_id=%s", (journal_id,)
             ).fetchone()[0]
             assert count == 2
-            assert conn.execute("SELECT count(*) FROM outbox_events WHERE id=%s", (event_id,)).fetchone()[0] == 1
+            assert (
+                conn.execute(
+                    "SELECT count(*) FROM outbox_events WHERE id=%s", (event_id,)
+                ).fetchone()[0]
+                == 1
+            )
             totals = conn.execute(
                 """SELECT side, sum(amount) FROM ledger_postings
                    WHERE journal_id=%s GROUP BY side ORDER BY side""",
                 (journal_id,),
             ).fetchall()
-            assert totals == [("CREDIT", Decimal("12.5000")), ("DEBIT", Decimal("12.5000"))]
+            assert totals == [
+                ("CREDIT", Decimal("12.5000")),
+                ("DEBIT", Decimal("12.5000")),
+            ]

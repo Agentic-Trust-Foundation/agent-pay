@@ -22,3 +22,56 @@ def test_lifecycle_operations_preserve_unknown_outcome():
     assert provider.capture("pay-1", 1000, "USD", "payment:pay-1:capture") == ProviderOutcome.UNKNOWN
     assert provider.void("pay-1", 1000, "USD", "payment:pay-1:void") == ProviderOutcome.UNKNOWN
     assert provider.refund("pay-1", 1000, "USD", "payment:pay-1:refund:r1") == ProviderOutcome.UNKNOWN
+
+
+
+def test_lifecycle_operation_amount_must_match_payment():
+    from decimal import Decimal
+    from agent_pay.lifecycle import PaymentLifecycle
+
+    amount, currency = PaymentLifecycle._validate_operation_amount(
+        requested_amount=Decimal("10.00"),
+        requested_currency="usd",
+        payment_amount=Decimal("10.00"),
+        payment_currency="USD",
+    )
+    assert amount == Decimal("10.00")
+    assert currency == "USD"
+
+    import pytest
+    with pytest.raises(ValueError, match="does not match payment amount"):
+        PaymentLifecycle._validate_operation_amount(
+            requested_amount=Decimal("9.99"),
+            requested_currency="USD",
+            payment_amount=Decimal("10.00"),
+            payment_currency="USD",
+        )
+
+    with pytest.raises(ValueError, match="does not match payment currency"):
+        PaymentLifecycle._validate_operation_amount(
+            requested_amount=Decimal("10.00"),
+            requested_currency="EUR",
+            payment_amount=Decimal("10.00"),
+            payment_currency="USD",
+        )
+
+
+def test_refund_amount_may_be_partial_but_currency_must_match():
+    from decimal import Decimal
+    from agent_pay.lifecycle import PaymentLifecycle
+    import pytest
+
+    amount, currency = PaymentLifecycle._validate_refund_amount(
+        requested_amount=Decimal("6.00"),
+        requested_currency="usd",
+        payment_currency="USD",
+    )
+    assert amount == Decimal("6.00")
+    assert currency == "USD"
+
+    with pytest.raises(ValueError, match="does not match payment currency"):
+        PaymentLifecycle._validate_refund_amount(
+            requested_amount=Decimal("6.00"),
+            requested_currency="EUR",
+            payment_currency="USD",
+        )

@@ -1,5 +1,8 @@
 name: Agent-Pay Validation
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -33,8 +36,8 @@ jobs:
       AGENT_PAY_DEV_AGENT_ID: 00000000-0000-0000-0000-000000000001
       AGENT_PAY_DEV_ACCOUNT_ID: 00000000-0000-0000-0000-000000000002
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install implementation
@@ -54,5 +57,22 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/009_payment_instrument_integrity.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/010_batch2_audit_notification_security.sql
           PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/011_authorization_evidence_integrity.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/012_outbox_worker_recovery.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d agent_pay -f specs/v1/migrations/013_request_fingerprint.sql
+      - name: Run Ruff lint
+        run: ruff check src tests
+
+      # The repository has historical formatting debt across the full tree.
+      # Keep formatting enforcement for newly touched code in the dedicated
+      # hygiene pass rather than blocking functional validation on legacy files.
+      - name: Report Ruff formatting debt
+        run: ruff format --check src tests || true
+
+      - name: Run mypy
+        run: mypy src
+
+      - name: Audit Python dependencies
+        run: pip-audit
+
       - name: Run reference tests
         run: pytest -q

@@ -3,7 +3,6 @@ from decimal import Decimal
 from uuid import UUID
 
 from .ledger import post_journal
-from .repositories import PaymentRepository
 from .unit_of_work import UnitOfWork
 
 
@@ -17,11 +16,17 @@ class ProviderEventResolver:
     def __init__(self, conn):
         self.conn = conn
 
-    def resolve(self, *, event_id: UUID, provider_operation_id: UUID,
-                outcome: str, provider_reference: str | None,
-                customer_ledger_account_id: UUID,
-                clearing_ledger_account_id: UUID,
-                correlation_id: str | None = None) -> str:
+    def resolve(
+        self,
+        *,
+        event_id: UUID,
+        provider_operation_id: UUID,
+        outcome: str,
+        provider_reference: str | None,
+        customer_ledger_account_id: UUID,
+        clearing_ledger_account_id: UUID,
+        correlation_id: str | None = None,
+    ) -> str:
         with UnitOfWork(self.conn):
             event = self.conn.execute(
                 "SELECT processing_status, signature_valid FROM provider_events WHERE id=%s FOR UPDATE",
@@ -67,21 +72,38 @@ class ProviderEventResolver:
                     if not reservation_id:
                         raise ValueError("successful charge has no budget reservation")
                     from .repositories import BudgetRepository
+
                     BudgetRepository(self.conn).consume(reservation_id)
                     amount_d = Decimal(str(amount))
                     currency_u = currency.strip().upper()
                     transaction_id = self._create_transaction(
-                        payment_id=payment_id, type_="CAPTURE", amount=amount_d,
-                        currency=currency_u, idempotency_key=f"payment:{payment_id}:capture:transaction",
+                        payment_id=payment_id,
+                        type_="CAPTURE",
+                        amount=amount_d,
+                        currency=currency_u,
+                        idempotency_key=f"payment:{payment_id}:capture:transaction",
                         external_reference=provider_reference,
                     )
                     post_journal(
-                        self.conn, currency=currency_u, reference_type="PAYMENT",
-                        reference_id=payment_id, idempotency_key=f"payment:{payment_id}:capture",
+                        self.conn,
+                        currency=currency_u,
+                        reference_type="PAYMENT",
+                        reference_id=payment_id,
+                        idempotency_key=f"payment:{payment_id}:capture",
                         correlation_id=correlation_id,
                         postings=[
-                            {"ledger_account_id": str(customer_ledger_account_id), "side": "DEBIT", "amount": amount_d, "currency": currency_u},
-                            {"ledger_account_id": str(clearing_ledger_account_id), "side": "CREDIT", "amount": amount_d, "currency": currency_u},
+                            {
+                                "ledger_account_id": str(customer_ledger_account_id),
+                                "side": "DEBIT",
+                                "amount": amount_d,
+                                "currency": currency_u,
+                            },
+                            {
+                                "ledger_account_id": str(clearing_ledger_account_id),
+                                "side": "CREDIT",
+                                "amount": amount_d,
+                                "currency": currency_u,
+                            },
                         ],
                     )
                     self.conn.execute(
@@ -104,6 +126,7 @@ class ProviderEventResolver:
                 )
                 if operation_type == "CHARGE" and reservation_id:
                     from .repositories import BudgetRepository
+
                     BudgetRepository(self.conn).release(reservation_id)
                 self.conn.execute(
                     """UPDATE payments
@@ -121,9 +144,16 @@ class ProviderEventResolver:
             )
             return "RESOLVED"
 
-    def _create_transaction(self, *, payment_id: UUID, type_: str, amount: Decimal,
-                            currency: str, idempotency_key: str,
-                            external_reference: str | None = None) -> UUID:
+    def _create_transaction(
+        self,
+        *,
+        payment_id: UUID,
+        type_: str,
+        amount: Decimal,
+        currency: str,
+        idempotency_key: str,
+        external_reference: str | None = None,
+    ) -> UUID:
         existing = self.conn.execute(
             "SELECT id FROM transactions WHERE idempotency_key=%s",
             (idempotency_key,),

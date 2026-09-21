@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from psycopg.errors import UniqueViolation
 
 from .auth import require_agent, resolve_approval_bearer, resolve_bearer
-from .authorization import AuthorizationContext, AuthorizationError
+from .authorization import AuthorizationError
 from .atf_evidence import verify_signed_assertion
 from .control import ControlRepository
 from .db import connection
@@ -206,7 +206,7 @@ def create_payment(
                     "verified_version": auth.version,
                     "verified_digest": auth.digest,
                 })
-                evidence_id = conn.execute(
+                evidence_row = conn.execute(
                     """INSERT INTO authorization_evidence
                        (account_id, agent_id, issuer_reference, evidence_type,
                         subject_reference, audience, issued_at, expires_at, evidence,
@@ -217,7 +217,10 @@ def create_payment(
                         evidence.evidence_type, auth.evidence_id, None, None,
                         auth.valid_until, json.dumps(evidence_payload),
                     ),
-                ).fetchone()[0]
+                ).fetchone()
+                if not evidence_row:
+                    raise RuntimeError("authorization evidence insert returned no row")
+                evidence_id = evidence_row[0]
 
             try:
                 # The unique business key closes the race between concurrent
