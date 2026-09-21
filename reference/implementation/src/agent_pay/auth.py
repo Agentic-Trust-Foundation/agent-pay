@@ -1,10 +1,12 @@
 """Authentication boundary for the reference implementation.
 
-Development mode is intentionally simple. Production mode verifies a short-lived
-OIDC/OAuth2 JWT using the provider JWKS, issuer, audience, and required scopes.
-The resulting principal is still bound to the claimed Agent-Pay agent/account.
+Development mode is intentionally simple but requires explicit credentials.
+Production mode verifies a short-lived OIDC/OAuth2 JWT using provider JWKS,
+issuer, audience, and required claims. The principal remains bound to the
+claimed Agent-Pay agent/account.
 """
 from dataclasses import dataclass
+import hmac
 import os
 
 import jwt
@@ -20,12 +22,17 @@ class Principal:
     issuer: str | None = None
 
 
+def _required_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise PermissionError(f"{name} is not configured")
+    return value
+
+
 def _oidc_principal(token: str) -> Principal:
-    jwks_url = os.getenv("AGENT_PAY_OIDC_JWKS_URL")
-    issuer = os.getenv("AGENT_PAY_OIDC_ISSUER")
-    audience = os.getenv("AGENT_PAY_OIDC_AUDIENCE")
-    if not jwks_url or not issuer or not audience:
-        raise PermissionError("OIDC authentication is not fully configured")
+    jwks_url = _required_env("AGENT_PAY_OIDC_JWKS_URL")
+    issuer = _required_env("AGENT_PAY_OIDC_ISSUER")
+    audience = _required_env("AGENT_PAY_OIDC_AUDIENCE")
 
     try:
         signing_key = PyJWKClient(jwks_url).get_signing_key_from_jwt(token)
@@ -37,12 +44,15 @@ def _oidc_principal(token: str) -> Principal:
             issuer=issuer,
             options={"require": ["exp", "iat", "sub", "iss", "aud"]},
         )
-    except jwt.PyJWTError as exc:
+    except (jwt.PyJWTError, Exception) as exc:
+        # Do not leak key-fetch, parsing, or token-validation details to callers.
         raise PermissionError("invalid OIDC bearer token") from exc
 
     agent_id = claims.get("agent_id")
     account_id = claims.get("account_id")
-    if not isinstance(agent_id, str) or not isinstance(account_id, str):
+    if not isinstance(agent_id, str) or not agent_id.strip():
+        raise PermissionError("OIDC token is missing Agent-Pay identity claims")
+    if not isinstance(account_id, str) or not account_id.strip():
         raise PermissionError("OIDC token is missing Agent-Pay identity claims")
 
     raw_scopes = claims.get("scope", "")
@@ -61,13 +71,11 @@ def resolve_bearer(token: str | None) -> Principal:
     if not token:
         raise PermissionError("bearer token is required")
     if mode == "development":
-        expected = os.getenv("AGENT_PAY_DEV_TOKEN", "local-agent-token")
-        if token != expected:
+        expected = _required_env("AGENT_PAY_DEV_TOKEN")
+        if not hmac.compare_digest(token, expected):
             raise PermissionError("invalid development bearer token")
-        agent_id = os.getenv("AGENT_PAY_DEV_AGENT_ID")
-        account_id = os.getenv("AGENT_PAY_DEV_ACCOUNT_ID")
-        if not agent_id or not account_id:
-            raise PermissionError("development principal is not configured")
+        agent_id = _required_env("AGENT_PAY_DEV_AGENT_ID")
+        account_id = _required_env("AGENT_PAY_DEV_ACCOUNT_ID")
         return Principal(agent_id, account_id, frozenset({"payments:create", "payments:read"}))
     if mode == "oidc":
         return _oidc_principal(token)
@@ -77,10 +85,10 @@ def resolve_bearer(token: str | None) -> Principal:
 def resolve_approval_bearer(token: str | None) -> str:
     if os.getenv("AGENT_PAY_AUTH_MODE", "strict") != "development":
         raise PermissionError("production approval authentication adapter is not configured")
-    expected = os.getenv("AGENT_PAY_APPROVAL_TOKEN", "local-approval-token")
-    if token != expected:
+    expected = _required_env("AGENT_PAY_APPROVAL_TOKEN")
+    if not token or not hmac.compare_digest(token, expected):
         raise PermissionError("invalid development approval bearer token")
-    return os.getenv("AGENT_PAY_APPROVAL_ACTOR", "local-user")
+    return _required_env("AGENT_PAY_APPROVAL_ACTOR")
 
 
 def require_agent(principal: Principal, claimed_agent_id: str, claimed_account_id: str) -> None:
