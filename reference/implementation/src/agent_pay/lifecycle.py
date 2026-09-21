@@ -42,6 +42,21 @@ class PaymentLifecycle:
             raise ValueError("operation currency does not match payment currency")
         return amount, currency
 
+    @staticmethod
+    def _validate_refund_amount(
+        *,
+        requested_amount: Decimal,
+        requested_currency: str,
+        payment_currency: str,
+    ) -> tuple[Decimal, str]:
+        amount = Decimal(str(requested_amount))
+        currency = requested_currency.strip().upper()
+        if amount <= 0:
+            raise ValueError("operation amount must be positive")
+        if currency != payment_currency.strip().upper():
+            raise ValueError("operation currency does not match payment currency")
+        return amount, currency
+
     def _create_transaction(self, *, payment_id: UUID, type_: str, amount: Decimal,
                             currency: str, idempotency_key: str,
                             original_transaction_id: UUID | None = None,
@@ -154,10 +169,9 @@ class PaymentLifecycle:
             raise ValueError("payment not found")
         if locked[0] not in ("SUCCEEDED", "REFUND_FAILED", "REFUNDED"):
             raise ValueError("only a captured payment can be refunded")
-        amount, currency = self._validate_operation_amount(
+        amount, currency = self._validate_refund_amount(
             requested_amount=amount,
             requested_currency=currency,
-            payment_amount=locked[1],
             payment_currency=locked[2],
         )
         existing_refund = self.conn.execute(
