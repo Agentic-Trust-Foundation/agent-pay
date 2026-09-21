@@ -1,5 +1,8 @@
 name: Agent-Pay Docker Clean Start
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
