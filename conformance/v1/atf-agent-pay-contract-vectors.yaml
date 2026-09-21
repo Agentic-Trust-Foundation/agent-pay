@@ -31,3 +31,43 @@ vectors:
     invariant: payment-and-settlement-are-distinct
     given: successful-payment
     expect: settlement-remains-a-separate-external-assertion
+
+  - id: contract-008
+    invariant: expired-authority-fails-closed
+    given: authorization-context-expired-before-payment
+    expect: DENY
+
+  - id: contract-009
+    invariant: revoked-authority-fails-closed
+    given: authorization-context-revoked-before-payment
+    expect: DENY
+
+  - id: contract-010
+    invariant: audience-mismatch-fails-closed
+    given: authority-evidence-for-different-audience
+    expect: DENY
+
+  - id: contract-011
+    invariant: subject-mismatch-fails-closed
+    given: authority-evidence-for-different-agent
+    expect: DENY
+
+  - id: contract-012
+    invariant: action-mismatch-fails-closed
+    given: authority-evidence-for-non-payment-action
+    expect: DENY
+
+  - id: contract-013
+    invariant: replay-does-not-widen-authority
+    given: previously-used-authority-evidence-for-different-intent
+    expect: DENY_OR_REVALIDATE
+
+  - id: contract-014
+    invariant: missing-required-evidence-fails-closed
+    given: authorization-context-missing-expiry-or-revocation-or-evidence-reference
+    expect: DENY
+
+  - id: contract-015
+    invariant: attenuation-is-monotonic
+    given: delegated-amount-or-resource-scope-narrower-than-upstream
+    expect: effective-authority-cannot-exceed-narrower-bound
