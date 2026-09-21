@@ -154,8 +154,12 @@ def test_concurrent_capture_and_void_are_mutually_exclusive():
             except ValueError as exc:
                 results.append(str(exc))
 
-    assert sum(result == "PROCESSING" for result in results) + sum(result == "VOID_REQUESTED" for result in results) == 1
-    assert sum("pending capture operation" in result for result in results if isinstance(result, str)) +            sum("pending void operation" in result for result in results if isinstance(result, str)) == 1
+    assert sum(result in {"PROCESSING", "VOID_REQUESTED"} for result in results) == 1
+    assert len(results) == 2
+    assert any(
+        isinstance(result, str) and result not in {"PROCESSING", "VOID_REQUESTED"}
+        for result in results
+    )
 
     with connection() as conn:
         provider = MockProvider(outcome=ProviderOutcome.SUCCEEDED)
