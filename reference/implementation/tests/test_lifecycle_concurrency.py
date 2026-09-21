@@ -78,10 +78,13 @@ def test_concurrent_refunds_never_exceed_captured_amount():
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(refund_once, amounts))
 
-    assert results.count("SUCCEEDED") + results.count("REFUNDED") == 1
+    assert results.count("REFUND_PROCESSING") == 1
     assert results.count("REJECTED") == 1
 
     with connection() as conn:
+        provider = MockProvider(outcome=ProviderOutcome.SUCCEEDED)
+        from agent_pay.provider_worker import ProviderOperationWorker
+        assert ProviderOperationWorker(conn, provider).run_once() == "SUCCEEDED"
         refunded = conn.execute(
             "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE payment_id=%s AND type='REFUND' AND status='POSTED'",
             (payment_id,),
@@ -147,4 +150,16 @@ def test_concurrent_capture_and_void_are_mutually_exclusive():
             except ValueError as exc:
                 results.append(str(exc))
 
-    assert sum(result == "SUCCEEDED" for result in results) + sum(result == "VOIDED" for result in results) == 1
+    assert sum(result == "PROCESSING" for result in results) + sum(result == "VOID_REQUESTED" for result in results) == 1
+    assert sum("pending capture operation" in result for result in results if isinstance(result, str)) +            sum("pending void operation" in result for result in results if isinstance(result, str)) == 1
+
+    with connection() as conn:
+        provider = MockProvider(outcome=ProviderOutcome.SUCCEEDED)
+        from agent_pay.provider_worker import ProviderOperationWorker
+        assert ProviderOperationWorker(conn, provider).run_once(
+            customer_ledger_account_id=customer,
+            clearing_ledger_account_id=clearing,
+        ) in {"SUCCEEDED", "VOIDED"}
+
+        status = conn.execute("SELECT status FROM payments WHERE id=%s", (payment_id,)).fetchone()[0]
+        assert status in {"SUCCEEDED", "VOIDED"}
