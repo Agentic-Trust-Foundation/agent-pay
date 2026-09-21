@@ -78,10 +78,17 @@ def test_concurrent_refunds_never_exceed_captured_amount():
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(refund_once, amounts))
 
-    assert results.count("SUCCEEDED") + results.count("REFUNDED") == 1
+    assert results.count("REFUND_PROCESSING") == 1
     assert results.count("REJECTED") == 1
 
     with connection() as conn:
+        provider = MockProvider(outcome=ProviderOutcome.SUCCEEDED)
+        from agent_pay.provider_worker import ProviderOperationWorker
+        operation_id = conn.execute(
+            "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+            (payment_id,),
+        ).fetchone()[0]
+        assert ProviderOperationWorker(conn, provider).run_once(operation_id=operation_id) == "SUCCEEDED"
         refunded = conn.execute(
             "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE payment_id=%s AND type='REFUND' AND status='POSTED'",
             (payment_id,),
@@ -147,4 +154,25 @@ def test_concurrent_capture_and_void_are_mutually_exclusive():
             except ValueError as exc:
                 results.append(str(exc))
 
-    assert sum(result == "SUCCEEDED" for result in results) + sum(result == "VOIDED" for result in results) == 1
+    assert sum(result in {"PROCESSING", "VOID_REQUESTED"} for result in results) == 1
+    assert len(results) == 2
+    assert any(
+        isinstance(result, str) and result not in {"PROCESSING", "VOID_REQUESTED"}
+        for result in results
+    )
+
+    with connection() as conn:
+        provider = MockProvider(outcome=ProviderOutcome.SUCCEEDED)
+        from agent_pay.provider_worker import ProviderOperationWorker
+        operation_id = conn.execute(
+            "SELECT id FROM provider_operations WHERE payment_id=%s ORDER BY created_at DESC LIMIT 1",
+            (payment_id,),
+        ).fetchone()[0]
+        assert ProviderOperationWorker(conn, provider).run_once(
+            operation_id=operation_id,
+            customer_ledger_account_id=customer,
+            clearing_ledger_account_id=clearing,
+        ) in {"SUCCEEDED", "VOIDED"}
+
+        status = conn.execute("SELECT status FROM payments WHERE id=%s", (payment_id,)).fetchone()[0]
+        assert status in {"SUCCEEDED", "VOIDED"}

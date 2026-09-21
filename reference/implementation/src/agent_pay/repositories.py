@@ -71,13 +71,16 @@ class PaymentRepository:
             (limit,),
         ).fetchall()
 
-    def create_provider_operation(self, payment_id: UUID, operation_type: str, idempotency_key: str) -> UUID:
+    def create_provider_operation(self, payment_id: UUID, operation_type: str, idempotency_key: str,
+                              request_payload: dict | None = None) -> UUID:
         row = self.conn.execute(
-            """INSERT INTO provider_operations (payment_id, operation_type, idempotency_key)
-               VALUES (%s,%s,%s)
-               ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
+            """INSERT INTO provider_operations
+                   (payment_id, operation_type, idempotency_key, request_payload)
+               VALUES (%s,%s,%s,%s::jsonb)
+               ON CONFLICT (idempotency_key) DO UPDATE
+                   SET idempotency_key=EXCLUDED.idempotency_key
                RETURNING id""",
-            (payment_id, operation_type, idempotency_key),
+            (payment_id, operation_type, idempotency_key, json.dumps(request_payload or {})),
         ).fetchone()
         self.conn.execute(
             """UPDATE payments
