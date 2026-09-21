@@ -49,7 +49,7 @@ class ProviderEventResolver:
         ).fetchone()
         if not row:
             raise ValueError("provider operation not found")
-        payment_id, operation_type, _, request_payload, operation_status, request_id, amount, currency, payment_status, reservation_id = row
+        payment_id, operation_type, _, request_payload, operation_status, request_id, amount, currency, _payment_status, reservation_id = row
 
         if operation_status not in ("UNKNOWN", "PENDING", "PROCESSING"):
             self.conn.execute(
