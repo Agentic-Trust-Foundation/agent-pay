@@ -197,12 +197,13 @@ def test_unknown_outcome_can_be_explicitly_retried_with_same_idempotency_key():
             clearing_ledger_account_id=clearing,
         ) == "UNKNOWN_EXTERNAL_OUTCOME"
 
-        operation = conn.execute(
-            """SELECT id,status,idempotency_key
-               FROM provider_operations WHERE payment_id=%s""",
-            (payment,),
-        ).fetchone()
-        assert operation[1] == "UNKNOWN"
+        with conn.transaction():
+            operation = conn.execute(
+                """SELECT id,status,idempotency_key
+                   FROM provider_operations WHERE payment_id=%s""",
+                (payment,),
+            ).fetchone()
+            assert operation[1] == "UNKNOWN"
 
         assert worker.retry_unknown(operation[0]) is True
 
