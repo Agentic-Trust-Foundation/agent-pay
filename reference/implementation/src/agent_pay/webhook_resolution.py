@@ -58,7 +58,7 @@ class ProviderEventResolver:
             )
             return "IGNORED"
 
-        from .provider import ProviderOutcome
+        from .provider import PaymentProvider, ProviderOutcome
         if outcome not in {"SUCCEEDED", "FAILED"}:
             raise ValueError("unsupported provider outcome")
         provider_outcome = ProviderOutcome(outcome)
@@ -73,7 +73,7 @@ class ProviderEventResolver:
             if not reservation_id or not customer_id or not clearing_id:
                 raise ValueError("charge operation is missing required execution context")
             from .orchestrator import PaymentOrchestrator
-            result = PaymentOrchestrator(self.conn, cast("PaymentProvider", None)).finalize(
+            result = PaymentOrchestrator(self.conn, cast(PaymentProvider, None)).finalize(
                 payment_id=payment_id,
                 payment_request_id=request_id,
                 reservation_id=reservation_id,
@@ -86,7 +86,6 @@ class ProviderEventResolver:
                 correlation_id=correlation_id,
             )
         else:
-            from .provider import PaymentProvider
             from .provider_worker import ProviderOperationWorker
             result = ProviderOperationWorker(self.conn, cast(PaymentProvider, None))._finalize_simple_operation(
                 operation_id=provider_operation_id,
