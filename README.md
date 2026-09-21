@@ -95,14 +95,16 @@ V1 also does not include live PSP/bank integrations, production card issuance, u
 Start here:
 
 1. `docs/roadmap/v1-complete-and-v2-roadmap-2026-09.md`
-2. `docs/release/v1-final-2026-09.md`
-3. `docs/architecture/v1-release-candidate-checklist-2026-09.md`
-4. `docs/architecture/project-boundaries.md`
-5. `docs/integration/atf-authorization-evidence-v1.md`
-6. `docs/protocol/api-v1.md` and `specs/v1/openapi.yaml`
-7. `specs/v1/migrations/`
-8. `conformance/v1/`
-9. `reference/implementation/`
+2. `docs/governance/repository-governance.md`
+3. `docs/governance/change-control.md`
+4. `docs/release/v1-final-2026-09.md`
+5. `docs/architecture/v1-release-candidate-checklist-2026-09.md`
+6. `docs/architecture/project-boundaries.md`
+7. `docs/integration/atf-authorization-evidence-v1.md`
+8. `docs/protocol/api-v1.md` and `specs/v1/openapi.yaml`
+9. `specs/v1/migrations/`
+10. `conformance/v1/`
+11. `reference/implementation/`
 
 ## Change Control
 
