@@ -1,0 +1,63 @@
+phase: 26
+protocol_version: agent-pay/v2
+vectors:
+  - id: trust-negotiation-established
+    expected_decision: ALLOW
+    rule: trust-context-established
+  - id: trust-negotiation-rejected
+    expected_decision: DENY
+    rule: rejected-trust-context
+  - id: trust-negotiation-indeterminate
+    expected_decision: DENY
+    rule: unverifiable-trust-context-fail-closed
+  - id: capability-constraint-intersection
+    expected_decision: ALLOW
+    rule: downstream-restriction-preserved
+  - id: capability-constraint-expansion
+    expected_decision: DENY
+    rule: constraint-expansion
+  - id: delegation-multi-hop-attenuation
+    expected_decision: ALLOW
+    rule: chain-intersection
+  - id: delegation-parent-revoked
+    expected_decision: DENY
+    rule: revoked-parent
+  - id: delegation-depth-exceeded
+    expected_decision: DENY
+    rule: depth-limit
+  - id: evidence-subject-mismatch
+    expected_decision: DENY
+    rule: subject-binding
+  - id: evidence-audience-substitution
+    expected_decision: DENY
+    rule: audience-binding
+  - id: credential-revoked
+    expected_decision: DENY
+    rule: revoked-credential
+  - id: credential-rotation-valid
+    expected_decision: ALLOW
+    rule: current-key-selection
+  - id: provenance-minimum-disclosure
+    expected_decision: ALLOW
+    rule: minimum-necessary-evidence
+  - id: enterprise-assurance-policy
+    expected_decision: ALLOW
+    rule: explicit-assurance-policy
+  - id: enterprise-assurance-not-authority
+    expected_decision: DENY
+    rule: assurance-does-not-grant-authority
+  - id: human-approval-without-authority
+    expected_decision: DENY
+    rule: approval-non-expansion
+  - id: malformed-security-claim
+    expected_decision: DENY
+    rule: fail-closed
+  - id: replayed-evidence
+    expected_decision: DENY
+    rule: replay-protection
+  - id: cross-language-equivalent-decision
+    expected_decision: ALLOW
+    rule: semantic-equivalence
+  - id: full-conformance-composed-negative
+    expected_decision: DENY
+    rule: composed-fail-closed
