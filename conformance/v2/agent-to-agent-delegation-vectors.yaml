@@ -1,0 +1,21 @@
+version: agent-pay/v2
+phase: 24
+vectors:
+  - id: delegated-payment-attenuation
+    atf_actions: [purchase]
+    agent_pay_action: purchase
+    expected: ALLOW
+  - id: delegated-payment-action-expansion
+    atf_actions: [purchase]
+    agent_pay_action: transfer
+    expected: DENY
+  - id: delegated-payment-amount-expansion
+    atf_max_amount: 100
+    requested_amount: 101
+    expected: DENY
+  - id: delegated-payment-expired-chain
+    delegation_expired: true
+    expected: DENY
+  - id: delegated-payment-revoked-chain
+    delegation_revoked: true
+    expected: DENY
