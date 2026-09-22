@@ -26,3 +26,6 @@ jobs:
       - name: Check ATF-Agent-Pay cross-repository contract
         working-directory: .
         run: python tools/check_cross_repo_conformance.py
+      - name: Check V2 interoperability contract
+        working-directory: .
+        run: python tools/check_v2_interoperability.py
