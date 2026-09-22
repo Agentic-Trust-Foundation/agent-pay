@@ -1,0 +1,31 @@
+version: agent-pay/v2
+phase: 25
+vectors:
+  - id: interop-positive-attenuation
+    expected: ALLOW
+  - id: interop-action-expansion
+    expected: DENY
+  - id: interop-amount-expansion
+    expected: DENY
+  - id: interop-expiry-expansion
+    expected: DENY
+  - id: interop-audience-substitution
+    expected: DENY
+  - id: interop-subject-mismatch
+    expected: DENY
+  - id: interop-expired-parent
+    expected: DENY
+  - id: interop-revoked-parent
+    expected: DENY
+  - id: interop-depth-exceeded
+    expected: DENY
+  - id: interop-replay
+    expected: DENY
+  - id: interop-malformed-unknown-claims
+    expected: DENY
+  - id: interop-revocation-indeterminate
+    expected: DENY
+  - id: interop-human-approval-no-authority
+    expected: DENY
+  - id: interop-equivalent-encoding
+    expected: ALLOW
