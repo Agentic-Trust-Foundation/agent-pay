@@ -1,0 +1,13 @@
+phases:
+  - 26
+  - 27
+  - 28
+  - 29
+  - 30
+  - 31
+  - 32
+  - 33
+  - 34
+protocol_version: agent-pay/v2
+upstream_protocol: atf/v2
+upstream_vector_path: conformance/v2/phase-26-34-vectors.yaml
