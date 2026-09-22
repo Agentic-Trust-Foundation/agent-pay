@@ -10,4 +10,7 @@ phases:
   - 34
 protocol_version: agent-pay/v2
 upstream_protocol: atf/v2
+upstream_repository: Agentic-Trust-Foundation/agentic-trust
+upstream_commit: e30fb82044ef3a67da38e77ebdf82c437d313b39
 upstream_vector_path: conformance/v2/phase-26-34-vectors.yaml
+upstream_vector_sha256: ede4631f3153894a319cdd1bbc7b9ff2d7ed29b77c179cfcad3cd91e4c86ee86
