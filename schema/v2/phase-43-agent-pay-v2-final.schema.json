@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent-Pay V2 Final",
+  "type": "object",
+  "required": ["phase","protocol_version","upstream_protocol","case_id","rule","expected_decision"],
+  "properties": {
+    "phase": {"const": 43},
+    "protocol_version": {"const": "agent-pay/v2"},
+    "upstream_protocol": {"const": "atf/v2"},
+    "case_id": {"type": "string", "minLength": 1},
+    "rule": {"type": "string", "minLength": 1},
+    "expected_decision": {"enum": ["ALLOW","DENY","REQUIRE_HUMAN"]}
+  },
+  "additionalProperties": false
+}
