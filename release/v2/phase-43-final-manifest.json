@@ -1,0 +1,16 @@
+{
+  "phase": 43,
+  "protocol_version": "agent-pay/v2",
+  "upstream_protocol": "atf/v2",
+  "release": "V2 Final",
+  "status": "candidate",
+  "gates": {
+    "phases_35_42_ci": "required",
+    "phase_43_ci": "required",
+    "atf_cross_repo": "required",
+    "security": "required",
+    "release_evidence": "required"
+  },
+  "breaking_change_policy": "new_protocol_version_required",
+  "rollback": "previous_v2_release"
+}
