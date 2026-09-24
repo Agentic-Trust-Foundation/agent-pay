@@ -1,0 +1,19 @@
+name: Agent-Pay V2 Final
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  final:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON contracts
+        run: python3 -m json.tool conformance/v2/phase-43/contract.json >/dev/null
+      - name: Run Phase 43 tests
+        run: python3 -m unittest discover -s tests/v2 -p 'test_phase_43_final.py'
+      - name: Run V2 final contract runner
+        run: python3 tools/v2_phase_contract_runner.py
