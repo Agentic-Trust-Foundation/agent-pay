@@ -1,0 +1,60 @@
+{
+  "phase": 35,
+  "protocol_version": "agent-pay/v2",
+  "upstream_protocol": "atf/v2",
+  "title": "Financial Semantics",
+  "completion": [
+    "specification",
+    "schema",
+    "vectors",
+    "implementation",
+    "tests",
+    "ci",
+    "cross_repository_verification"
+  ],
+  "invariants": [
+    "fail_closed",
+    "no_authority_expansion",
+    "reproducible_vectors",
+    "breaking_change_requires_new_protocol"
+  ],
+  "rules": [
+    "currency_consistent",
+    "amount_non_negative",
+    "precision_within_minor_units",
+    "idempotency_present",
+    "lifecycle_transition_valid"
+  ],
+  "vectors": [
+    {
+      "id": "phase-35-01-currency_consistent",
+      "expected_decision": "ALLOW",
+      "rule": "currency_consistent"
+    },
+    {
+      "id": "phase-35-02-amount_non_negative",
+      "expected_decision": "ALLOW",
+      "rule": "amount_non_negative"
+    },
+    {
+      "id": "phase-35-03-precision_within_minor_units",
+      "expected_decision": "ALLOW",
+      "rule": "precision_within_minor_units"
+    },
+    {
+      "id": "phase-35-04-idempotency_present",
+      "expected_decision": "ALLOW",
+      "rule": "idempotency_present"
+    },
+    {
+      "id": "phase-35-05-lifecycle_transition_valid",
+      "expected_decision": "ALLOW",
+      "rule": "lifecycle_transition_valid"
+    },
+    {
+      "id": "phase-35-negative-fail-closed",
+      "expected_decision": "DENY",
+      "rule": "fail-closed"
+    }
+  ]
+}
