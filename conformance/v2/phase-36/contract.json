@@ -1,0 +1,60 @@
+{
+  "phase": 36,
+  "protocol_version": "agent-pay/v2",
+  "upstream_protocol": "atf/v2",
+  "title": "Virtual Card / Payment Provider Architecture",
+  "completion": [
+    "specification",
+    "schema",
+    "vectors",
+    "implementation",
+    "tests",
+    "ci",
+    "cross_repository_verification"
+  ],
+  "invariants": [
+    "fail_closed",
+    "no_authority_expansion",
+    "reproducible_vectors",
+    "breaking_change_requires_new_protocol"
+  ],
+  "rules": [
+    "instrument_is_reference_only",
+    "provider_supports_operation",
+    "instrument_active",
+    "routing_deterministic",
+    "no_raw_credential"
+  ],
+  "vectors": [
+    {
+      "id": "phase-36-01-instrument_is_reference_only",
+      "expected_decision": "ALLOW",
+      "rule": "instrument_is_reference_only"
+    },
+    {
+      "id": "phase-36-02-provider_supports_operation",
+      "expected_decision": "ALLOW",
+      "rule": "provider_supports_operation"
+    },
+    {
+      "id": "phase-36-03-instrument_active",
+      "expected_decision": "ALLOW",
+      "rule": "instrument_active"
+    },
+    {
+      "id": "phase-36-04-routing_deterministic",
+      "expected_decision": "ALLOW",
+      "rule": "routing_deterministic"
+    },
+    {
+      "id": "phase-36-05-no_raw_credential",
+      "expected_decision": "ALLOW",
+      "rule": "no_raw_credential"
+    },
+    {
+      "id": "phase-36-negative-fail-closed",
+      "expected_decision": "DENY",
+      "rule": "fail-closed"
+    }
+  ]
+}
