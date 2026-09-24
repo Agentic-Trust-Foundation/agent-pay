@@ -1,0 +1,60 @@
+{
+  "phase": 40,
+  "protocol_version": "agent-pay/v2",
+  "upstream_protocol": "atf/v2",
+  "title": "Independent Interoperability Certification",
+  "completion": [
+    "specification",
+    "schema",
+    "vectors",
+    "implementation",
+    "tests",
+    "ci",
+    "cross_repository_verification"
+  ],
+  "invariants": [
+    "fail_closed",
+    "no_authority_expansion",
+    "reproducible_vectors",
+    "breaking_change_requires_new_protocol"
+  ],
+  "rules": [
+    "schema_digest_match",
+    "vector_set_match",
+    "independent_runners",
+    "evidence_reproducible",
+    "protocol_version_match"
+  ],
+  "vectors": [
+    {
+      "id": "phase-40-01-schema_digest_match",
+      "expected_decision": "ALLOW",
+      "rule": "schema_digest_match"
+    },
+    {
+      "id": "phase-40-02-vector_set_match",
+      "expected_decision": "ALLOW",
+      "rule": "vector_set_match"
+    },
+    {
+      "id": "phase-40-03-independent_runners",
+      "expected_decision": "ALLOW",
+      "rule": "independent_runners"
+    },
+    {
+      "id": "phase-40-04-evidence_reproducible",
+      "expected_decision": "ALLOW",
+      "rule": "evidence_reproducible"
+    },
+    {
+      "id": "phase-40-05-protocol_version_match",
+      "expected_decision": "ALLOW",
+      "rule": "protocol_version_match"
+    },
+    {
+      "id": "phase-40-negative-fail-closed",
+      "expected_decision": "DENY",
+      "rule": "fail-closed"
+    }
+  ]
+}
