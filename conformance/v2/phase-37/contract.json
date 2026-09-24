@@ -1,0 +1,60 @@
+{
+  "phase": 37,
+  "protocol_version": "agent-pay/v2",
+  "upstream_protocol": "atf/v2",
+  "title": "Commerce Protocol Integration",
+  "completion": [
+    "specification",
+    "schema",
+    "vectors",
+    "implementation",
+    "tests",
+    "ci",
+    "cross_repository_verification"
+  ],
+  "invariants": [
+    "fail_closed",
+    "no_authority_expansion",
+    "reproducible_vectors",
+    "breaking_change_requires_new_protocol"
+  ],
+  "rules": [
+    "merchant_bound",
+    "quote_fresh",
+    "order_total_matches",
+    "payment_intent_bound",
+    "idempotency_present"
+  ],
+  "vectors": [
+    {
+      "id": "phase-37-01-merchant_bound",
+      "expected_decision": "ALLOW",
+      "rule": "merchant_bound"
+    },
+    {
+      "id": "phase-37-02-quote_fresh",
+      "expected_decision": "ALLOW",
+      "rule": "quote_fresh"
+    },
+    {
+      "id": "phase-37-03-order_total_matches",
+      "expected_decision": "ALLOW",
+      "rule": "order_total_matches"
+    },
+    {
+      "id": "phase-37-04-payment_intent_bound",
+      "expected_decision": "ALLOW",
+      "rule": "payment_intent_bound"
+    },
+    {
+      "id": "phase-37-05-idempotency_present",
+      "expected_decision": "ALLOW",
+      "rule": "idempotency_present"
+    },
+    {
+      "id": "phase-37-negative-fail-closed",
+      "expected_decision": "DENY",
+      "rule": "fail-closed"
+    }
+  ]
+}
