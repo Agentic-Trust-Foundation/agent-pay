@@ -17,3 +17,5 @@ jobs:
         run: python3 -m unittest discover -s tests/v2 -p 'test_phase_43_final.py'
       - name: Run V2 final contract runner
         run: python3 tools/v2_phase_contract_runner.py
+      - name: Run ATF cross-repository verification
+        run: python3 tools/v2_final_cross_repo.py
