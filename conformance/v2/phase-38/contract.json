@@ -1,0 +1,60 @@
+{
+  "phase": 38,
+  "protocol_version": "agent-pay/v2",
+  "upstream_protocol": "atf/v2",
+  "title": "Real Deployment Profiles",
+  "completion": [
+    "specification",
+    "schema",
+    "vectors",
+    "implementation",
+    "tests",
+    "ci",
+    "cross_repository_verification"
+  ],
+  "invariants": [
+    "fail_closed",
+    "no_authority_expansion",
+    "reproducible_vectors",
+    "breaking_change_requires_new_protocol"
+  ],
+  "rules": [
+    "environment_explicit",
+    "tls_required",
+    "secret_reference_only",
+    "replicas_valid",
+    "provider_mode_explicit"
+  ],
+  "vectors": [
+    {
+      "id": "phase-38-01-environment_explicit",
+      "expected_decision": "ALLOW",
+      "rule": "environment_explicit"
+    },
+    {
+      "id": "phase-38-02-tls_required",
+      "expected_decision": "ALLOW",
+      "rule": "tls_required"
+    },
+    {
+      "id": "phase-38-03-secret_reference_only",
+      "expected_decision": "ALLOW",
+      "rule": "secret_reference_only"
+    },
+    {
+      "id": "phase-38-04-replicas_valid",
+      "expected_decision": "ALLOW",
+      "rule": "replicas_valid"
+    },
+    {
+      "id": "phase-38-05-provider_mode_explicit",
+      "expected_decision": "ALLOW",
+      "rule": "provider_mode_explicit"
+    },
+    {
+      "id": "phase-38-negative-fail-closed",
+      "expected_decision": "DENY",
+      "rule": "fail-closed"
+    }
+  ]
+}
