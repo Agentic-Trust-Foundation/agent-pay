@@ -1,0 +1,43 @@
+{
+  "phase": 43,
+  "protocol_version": "agent-pay/v2",
+  "upstream_protocol": "atf/v2",
+  "title": "Agent-Pay V2 Final",
+  "rules": [
+    "all_v2_gates_green",
+    "protocol_frozen",
+    "final_vectors_green",
+    "security_gate_green",
+    "release_evidence_complete"
+  ],
+  "vectors": [
+    {"id":"phase-43-01-all_v2_gates_green","expected_decision":"ALLOW","rule":"all_v2_gates_green"},
+    {"id":"phase-43-02-protocol_frozen","expected_decision":"ALLOW","rule":"protocol_frozen"},
+    {"id":"phase-43-03-final_vectors_green","expected_decision":"ALLOW","rule":"final_vectors_green"},
+    {"id":"phase-43-04-security_gate_green","expected_decision":"ALLOW","rule":"security_gate_green"},
+    {"id":"phase-43-05-release_evidence_complete","expected_decision":"ALLOW","rule":"release_evidence_complete"},
+    {"id":"phase-43-negative-fail-closed","expected_decision":"DENY","rule":"fail-closed"}
+  ],
+  "invariants": [
+    "fail_closed",
+    "no_authority_expansion",
+    "deterministic_decision",
+    "reproducible_vectors",
+    "breaking_change_requires_new_protocol",
+    "protocol_version_frozen"
+  ],
+  "implementation": {
+    "evaluator": "tools/v2_phase_contract_runner.py",
+    "rules": [
+      "all_v2_gates_green",
+      "protocol_frozen",
+      "final_vectors_green",
+      "security_gate_green",
+      "release_evidence_complete"
+    ]
+  },
+  "tests": {
+    "vector_count": 6,
+    "negative_case": "fail-closed"
+  }
+}
