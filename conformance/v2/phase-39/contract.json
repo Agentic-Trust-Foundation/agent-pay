@@ -1,0 +1,60 @@
+{
+  "phase": 39,
+  "protocol_version": "agent-pay/v2",
+  "upstream_protocol": "atf/v2",
+  "title": "Security Hardening",
+  "completion": [
+    "specification",
+    "schema",
+    "vectors",
+    "implementation",
+    "tests",
+    "ci",
+    "cross_repository_verification"
+  ],
+  "invariants": [
+    "fail_closed",
+    "no_authority_expansion",
+    "reproducible_vectors",
+    "breaking_change_requires_new_protocol"
+  ],
+  "rules": [
+    "signature_valid",
+    "audience_bound",
+    "nonce_present",
+    "replay_absent",
+    "secret_not_exposed"
+  ],
+  "vectors": [
+    {
+      "id": "phase-39-01-signature_valid",
+      "expected_decision": "ALLOW",
+      "rule": "signature_valid"
+    },
+    {
+      "id": "phase-39-02-audience_bound",
+      "expected_decision": "ALLOW",
+      "rule": "audience_bound"
+    },
+    {
+      "id": "phase-39-03-nonce_present",
+      "expected_decision": "ALLOW",
+      "rule": "nonce_present"
+    },
+    {
+      "id": "phase-39-04-replay_absent",
+      "expected_decision": "ALLOW",
+      "rule": "replay_absent"
+    },
+    {
+      "id": "phase-39-05-secret_not_exposed",
+      "expected_decision": "ALLOW",
+      "rule": "secret_not_exposed"
+    },
+    {
+      "id": "phase-39-negative-fail-closed",
+      "expected_decision": "DENY",
+      "rule": "fail-closed"
+    }
+  ]
+}
