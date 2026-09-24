@@ -1,0 +1,13 @@
+name: Agent-Pay V2 Phases 35-42
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run local and ATF cross-repository conformance
+        run: python3 tools/v2_phase_contract_runner.py
