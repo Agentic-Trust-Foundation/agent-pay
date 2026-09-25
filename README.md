@@ -1,6 +1,17 @@
 # Agent-Pay
 
+> **Financial control and payment execution layer for the Agentic Internet, built on delegated authority from ATF.**
+
 Agent-Pay is the financial control and payment layer for the agentic internet.
+
+## Canonical relationship with ATF
+
+Agentic Trust Foundation (ATF) establishes identity, delegation, authorization, trust, consent, revocation, provenance, and authority evidence. Agent-Pay consumes that authority context and applies financial policy, budgets, approvals, payment instruments, provider execution, transaction/ledger, settlement, and reconciliation.
+
+**Agent-Pay never expands upstream authority.**
+
+For the project-level definition, problem statement, glossary, and evidence boundary, see the canonical documents in the ATF repository: PROJECT.md, WHY.md, AI-CONTEXT.md, and STATUS.md.
+
 
 ## V1 Status
 
