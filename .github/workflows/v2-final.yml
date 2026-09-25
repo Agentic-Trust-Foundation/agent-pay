@@ -10,7 +10,7 @@ jobs:
   final:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate JSON contracts
         run: python3 -m json.tool conformance/v2/phase-43/contract.json >/dev/null
       - name: Run Phase 43 tests
@@ -19,7 +19,7 @@ jobs:
         run: python3 tools/v2_phase_contract_runner.py
       - name: Run ATF cross-repository verification
         run: python3 tools/v2_final_cross_repo.py
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.22"
       - name: Fetch pinned ATF V2 Go verifier
