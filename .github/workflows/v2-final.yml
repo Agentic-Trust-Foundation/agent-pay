@@ -19,3 +19,16 @@ jobs:
         run: python3 tools/v2_phase_contract_runner.py
       - name: Run ATF cross-repository verification
         run: python3 tools/v2_final_cross_repo.py
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Fetch pinned ATF V2 Go verifier
+        run: |
+          rm -rf /tmp/agentic-trust
+          git init /tmp/agentic-trust
+          git -C /tmp/agentic-trust remote add origin https://github.com/Agentic-Trust-Foundation/agentic-trust.git
+          git -C /tmp/agentic-trust fetch --depth 1 origin 635dae5cff945a88d1629e8ae20feffff10fe11e
+          git -C /tmp/agentic-trust checkout --detach FETCH_HEAD
+      - name: Run pinned ATF independent Go verifier
+        working-directory: /tmp/agentic-trust/reference/implementation/go/v2-final-conformance
+        run: go run .
